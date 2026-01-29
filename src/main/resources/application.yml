@@ -1,0 +1,89 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: invoice-pdf-generation-service
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:invoicepdf_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# Apache Camel
+camel:
+  springboot:
+    name: invoice-pdf-generation-camel
+    main-run-controller: true
+  component:
+    kafka:
+      brokers: ${KAFKA_BROKERS:localhost:9092}
+
+# Application-specific configuration
+app:
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumer:
+      group-id: invoice-pdf-generation-service
+    topics:
+      xml-signed-invoice: xml.signed.invoice
+      pdf-generated: pdf.generated
+      pdf-signing-requested: pdf.signing.invoice.requested
+      dlq: pdf.generation.invoice.dlq
+  pdf:
+    storage:
+      path: ${PDF_STORAGE_PATH:/var/documents/invoices}
+      base-url: ${PDF_STORAGE_BASE_URL:http://localhost:8084}
+
+# Eureka client configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,camelroutes
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.wpanther.invoice.pdf: DEBUG
+    org.apache.camel: INFO
+    org.apache.camel.component.kafka: DEBUG
+    org.apache.fop: INFO
+    org.apache.pdfbox: INFO
