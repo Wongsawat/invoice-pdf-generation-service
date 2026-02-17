@@ -1,36 +1,53 @@
 package com.wpanther.invoice.pdf.domain.event;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wpanther.saga.domain.model.IntegrationEvent;
+import lombok.Getter;
+
 import java.time.Instant;
 import java.util.UUID;
 
 /**
  * Event published when an invoice PDF has been generated
  */
-public class InvoicePdfGeneratedEvent {
+@Getter
+public class InvoicePdfGeneratedEvent extends IntegrationEvent {
 
-    private final String eventId;
-    private final String eventType = "pdf.generated.invoice";
-    private final Instant occurredAt;
-    private final int version = 1;
+    private static final String EVENT_TYPE = "pdf.generated.invoice";
+
+    @JsonProperty("documentId")
     private final String documentId;
+
+    @JsonProperty("invoiceId")
     private final String invoiceId;
+
+    @JsonProperty("invoiceNumber")
     private final String invoiceNumber;
+
+    @JsonProperty("documentUrl")
     private final String documentUrl;
+
+    @JsonProperty("fileSize")
     private final long fileSize;
+
+    @JsonProperty("xmlEmbedded")
     private final boolean xmlEmbedded;
+
+    @JsonProperty("correlationId")
     private final String correlationId;
 
+    // Default constructor - calls super() for auto-generated metadata
     public InvoicePdfGeneratedEvent(
-        String documentId,
-        String invoiceId,
-        String invoiceNumber,
-        String documentUrl,
-        long fileSize,
-        boolean xmlEmbedded,
-        String correlationId
+            String documentId,
+            String invoiceId,
+            String invoiceNumber,
+            String documentUrl,
+            long fileSize,
+            boolean xmlEmbedded,
+            String correlationId
     ) {
-        this.eventId = UUID.randomUUID().toString();
-        this.occurredAt = Instant.now();
+        super();
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
@@ -40,47 +57,33 @@ public class InvoicePdfGeneratedEvent {
         this.correlationId = correlationId;
     }
 
-    public String getEventId() {
-        return eventId;
-    }
-
+    @Override
     public String getEventType() {
-        return eventType;
+        return EVENT_TYPE;
     }
 
-    public Instant getOccurredAt() {
-        return occurredAt;
-    }
-
-    public int getVersion() {
-        return version;
-    }
-
-    public String getDocumentId() {
-        return documentId;
-    }
-
-    public String getInvoiceId() {
-        return invoiceId;
-    }
-
-    public String getInvoiceNumber() {
-        return invoiceNumber;
-    }
-
-    public String getDocumentUrl() {
-        return documentUrl;
-    }
-
-    public long getFileSize() {
-        return fileSize;
-    }
-
-    public boolean isXmlEmbedded() {
-        return xmlEmbedded;
-    }
-
-    public String getCorrelationId() {
-        return correlationId;
+    // JsonCreator constructor for Kafka deserialization
+    @JsonCreator
+    public InvoicePdfGeneratedEvent(
+            @JsonProperty("eventId") UUID eventId,
+            @JsonProperty("occurredAt") Instant occurredAt,
+            @JsonProperty("eventType") String eventType,
+            @JsonProperty("version") int version,
+            @JsonProperty("documentId") String documentId,
+            @JsonProperty("invoiceId") String invoiceId,
+            @JsonProperty("invoiceNumber") String invoiceNumber,
+            @JsonProperty("documentUrl") String documentUrl,
+            @JsonProperty("fileSize") long fileSize,
+            @JsonProperty("xmlEmbedded") boolean xmlEmbedded,
+            @JsonProperty("correlationId") String correlationId
+    ) {
+        super(eventId, occurredAt, eventType, version);
+        this.documentId = documentId;
+        this.invoiceId = invoiceId;
+        this.invoiceNumber = invoiceNumber;
+        this.documentUrl = documentUrl;
+        this.fileSize = fileSize;
+        this.xmlEmbedded = xmlEmbedded;
+        this.correlationId = correlationId;
     }
 }

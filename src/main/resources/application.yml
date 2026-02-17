@@ -34,6 +34,9 @@ camel:
   springboot:
     name: invoice-pdf-generation-camel
     main-run-controller: true
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: true
   component:
     kafka:
       brokers: ${KAFKA_BROKERS:localhost:9092}
@@ -45,8 +48,8 @@ app:
     consumer:
       group-id: invoice-pdf-generation-service
     topics:
-      xml-signed-invoice: xml.signed.invoice
-      xml-stored: xml.stored
+      saga-command-invoice-pdf: saga.command.invoice-pdf
+      saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
       pdf-generated: pdf.generated
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.invoice.dlq
@@ -54,9 +57,6 @@ app:
     storage:
       path: ${PDF_STORAGE_PATH:/var/documents/invoices}
       base-url: ${PDF_STORAGE_BASE_URL:http://localhost:8084}
-  storage:
-    fetch:
-      enabled: ${STORAGE_FETCH_ENABLED:true}
 
 # Eureka client configuration
 eureka:
