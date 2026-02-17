@@ -138,6 +138,13 @@
             <version>${pdfbox.version}</version>
         </dependency>
 
+        <!-- Saga Commons for IntegrationEvent base class -->
+        <dependency>
+            <groupId>com.wpanther</groupId>
+            <artifactId>saga-commons</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- XML Processing -->
         <dependency>
             <groupId>jakarta.xml.bind</groupId>
