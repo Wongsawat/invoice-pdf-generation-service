@@ -13,15 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Optional;
 
-/**
- * Handles saga commands from orchestrator for invoice PDF generation.
- * Delegates business logic to InvoicePdfDocumentService and sends replies.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -31,18 +26,17 @@ public class SagaCommandHandler {
     private final InvoicePdfDocumentService pdfDocumentService;
     private final SagaReplyPublisher sagaReplyPublisher;
     private final EventPublisher eventPublisher;
+    private final RestTemplate restTemplate;
 
-    /**
-     * Handle a ProcessInvoicePdfCommand from saga orchestrator.
-     * Generates PDF and sends a SUCCESS or FAILURE reply.
-     */
+    @Value("${app.pdf.generation.max-retries:3}")
+    private int maxRetries;
+
     @Transactional
     public void handleProcessCommand(ProcessInvoicePdfCommand command) {
         log.info("Handling ProcessInvoicePdfCommand for saga {} invoice {}",
                 command.getSagaId(), command.getInvoiceNumber());
 
         try {
-            // Check if already generated (idempotency)
             Optional<InvoicePdfDocumentEntity> existing =
                     repository.findByInvoiceId(command.getInvoiceId());
 
@@ -50,41 +44,67 @@ public class SagaCommandHandler {
                 log.warn("Invoice PDF already generated for {}, sending SUCCESS reply",
                         command.getInvoiceNumber());
 
-                // Publish events for already-completed document
                 InvoicePdfDocumentEntity entity = existing.get();
                 publishEvents(entity, command);
 
                 sagaReplyPublisher.publishSuccess(
                         command.getSagaId(),
                         command.getSagaStep(),
-                        command.getCorrelationId()
+                        command.getCorrelationId(),
+                        entity.getDocumentUrl(),
+                        entity.getFileSize()
                 );
                 return;
             }
 
-            // Delete any existing failed document
             if (existing.isPresent() && existing.get().getStatus() == com.wpanther.invoice.pdf.domain.model.GenerationStatus.FAILED) {
-                repository.deleteById(existing.get().getId());
+                InvoicePdfDocumentEntity entity = existing.get();
+                int retryCount = entity.getRetryCount() != null ? entity.getRetryCount() : 0;
+                if (retryCount >= maxRetries) {
+                    log.error("Max retries ({}) exceeded for saga {} invoice {}",
+                            maxRetries, command.getSagaId(), command.getInvoiceNumber());
+                    sagaReplyPublisher.publishFailure(
+                            command.getSagaId(),
+                            command.getSagaStep(),
+                            command.getCorrelationId(),
+                            "Maximum retry attempts exceeded"
+                    );
+                    return;
+                }
+                repository.deleteById(entity.getId());
                 repository.flush();
             }
 
-            // Generate PDF (calls existing service)
+            String signedXmlUrl = command.getSignedXmlUrl();
+            String signedXml = restTemplate.getForObject(signedXmlUrl, String.class);
+            if (signedXml == null || signedXml.isBlank()) {
+                throw new IllegalStateException("Failed to download signed XML from " + signedXmlUrl);
+            }
+
             InvoicePdfDocument document = pdfDocumentService.generatePdf(
                     command.getInvoiceId(),
                     command.getInvoiceNumber(),
-                    command.getSignedXmlContent(),
+                    signedXml,
                     command.getInvoiceDataJson()
             );
 
-            // Publish events via outbox
+            if (existing.isPresent()) {
+                repository.findByInvoiceId(command.getInvoiceId()).ifPresent(entity -> {
+                    int retryCount = existing.get().getRetryCount() != null ? existing.get().getRetryCount() : 0;
+                    entity.setRetryCount(retryCount + 1);
+                    repository.save(entity);
+                });
+            }
+
             repository.findByInvoiceId(command.getInvoiceId()).ifPresent(entity ->
                     publishEvents(entity, command));
 
-            // Send SUCCESS reply
             sagaReplyPublisher.publishSuccess(
                     command.getSagaId(),
                     command.getSagaStep(),
-                    command.getCorrelationId()
+                    command.getCorrelationId(),
+                    document.getDocumentUrl(),
+                    (long) document.getFileSize()
             );
 
             log.info("Successfully processed invoice PDF generation for saga {} invoice {}",
@@ -94,7 +114,6 @@ public class SagaCommandHandler {
             log.error("Failed to process invoice PDF generation for saga {} invoice {}: {}",
                     command.getSagaId(), command.getInvoiceNumber(), e.getMessage(), e);
 
-            // Send FAILURE reply
             sagaReplyPublisher.publishFailure(
                     command.getSagaId(),
                     command.getSagaStep(),
@@ -104,10 +123,6 @@ public class SagaCommandHandler {
         }
     }
 
-    /**
-     * Handle a CompensateInvoicePdfCommand from saga orchestrator.
-     * Deletes generated PDF document and sends a COMPENSATED reply.
-     */
     @Transactional
     public void handleCompensation(CompensateInvoicePdfCommand command) {
         log.info("Handling compensation for saga {} invoice {}",
@@ -119,16 +134,9 @@ public class SagaCommandHandler {
 
             if (existing.isPresent()) {
                 InvoicePdfDocumentEntity entity = existing.get();
-                // Delete PDF file from filesystem
                 if (entity.getDocumentPath() != null) {
-                    try {
-                        Files.deleteIfExists(Paths.get(entity.getDocumentPath()));
-                        log.info("Deleted PDF file: {}", entity.getDocumentPath());
-                    } catch (Exception e) {
-                        log.warn("Failed to delete PDF file: {}", entity.getDocumentPath(), e);
-                    }
+                    pdfDocumentService.deletePdfFile(entity.getDocumentPath());
                 }
-                // Delete database record
                 repository.deleteById(entity.getId());
                 log.info("Deleted InvoicePdfDocument {} for compensation", entity.getId());
             } else {
@@ -136,7 +144,6 @@ public class SagaCommandHandler {
                         command.getInvoiceId());
             }
 
-            // Send COMPENSATED reply (idempotent)
             sagaReplyPublisher.publishCompensated(
                     command.getSagaId(),
                     command.getSagaStep(),
@@ -147,7 +154,6 @@ public class SagaCommandHandler {
             log.error("Failed to compensate invoice PDF generation for saga {} invoice {}: {}",
                     command.getSagaId(), command.getInvoiceId(), e.getMessage(), e);
 
-            // Send FAILURE reply
             sagaReplyPublisher.publishFailure(
                     command.getSagaId(),
                     command.getSagaStep(),
@@ -157,10 +163,6 @@ public class SagaCommandHandler {
         }
     }
 
-    /**
-     * Publish PDF generated event to notification service.
-     * PDF signing is handled by the orchestrator via saga commands.
-     */
     private void publishEvents(InvoicePdfDocumentEntity entity, ProcessInvoicePdfCommand command) {
         InvoicePdfGeneratedEvent event = new InvoicePdfGeneratedEvent(
                 command.getDocumentId(),

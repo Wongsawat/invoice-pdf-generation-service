@@ -35,8 +35,8 @@ public class ProcessInvoicePdfCommand extends IntegrationEvent {
     @JsonProperty("invoiceNumber")
     private final String invoiceNumber;
 
-    @JsonProperty("signedXmlContent")
-    private final String signedXmlContent;
+    @JsonProperty("signedXmlUrl")
+    private final String signedXmlUrl;
 
     @JsonProperty("invoiceDataJson")
     private final String invoiceDataJson;
@@ -53,7 +53,7 @@ public class ProcessInvoicePdfCommand extends IntegrationEvent {
             @JsonProperty("documentId") String documentId,
             @JsonProperty("invoiceId") String invoiceId,
             @JsonProperty("invoiceNumber") String invoiceNumber,
-            @JsonProperty("signedXmlContent") String signedXmlContent,
+            @JsonProperty("signedXmlUrl") String signedXmlUrl,
             @JsonProperty("invoiceDataJson") String invoiceDataJson) {
         super(eventId, occurredAt, eventType, version);
         this.sagaId = sagaId;
@@ -62,7 +62,7 @@ public class ProcessInvoicePdfCommand extends IntegrationEvent {
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
-        this.signedXmlContent = signedXmlContent;
+        this.signedXmlUrl = signedXmlUrl;
         this.invoiceDataJson = invoiceDataJson;
     }
 
@@ -71,7 +71,7 @@ public class ProcessInvoicePdfCommand extends IntegrationEvent {
      */
     public ProcessInvoicePdfCommand(String sagaId, String sagaStep, String correlationId,
                                      String documentId, String invoiceId, String invoiceNumber,
-                                     String signedXmlContent, String invoiceDataJson) {
+                                     String signedXmlUrl, String invoiceDataJson) {
         super();
         this.sagaId = sagaId;
         this.sagaStep = sagaStep;
@@ -79,7 +79,7 @@ public class ProcessInvoicePdfCommand extends IntegrationEvent {
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
-        this.signedXmlContent = signedXmlContent;
+        this.signedXmlUrl = signedXmlUrl;
         this.invoiceDataJson = invoiceDataJson;
     }
 }
