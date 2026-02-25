@@ -2,6 +2,7 @@ package com.wpanther.invoice.pdf.infrastructure.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.invoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class EventPublisher {
+public class EventPublisher implements PdfEventPort {
 
     private static final String AGGREGATE_TYPE = "InvoicePdfDocument";
 

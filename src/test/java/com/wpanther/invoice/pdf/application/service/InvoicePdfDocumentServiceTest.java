@@ -1,24 +1,16 @@
 package com.wpanther.invoice.pdf.application.service;
 
+import com.wpanther.invoice.pdf.application.port.out.PdfStoragePort;
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -35,19 +27,13 @@ class InvoicePdfDocumentServiceTest {
     private InvoicePdfGenerationService pdfGenerationService;
 
     @Mock
-    private S3Client s3Client;
+    private PdfStoragePort pdfStoragePort;
 
     @InjectMocks
     private InvoicePdfDocumentService service;
 
-    private static final String BUCKET = "invoices";
-    private static final String BASE_URL = "http://localhost:9000/invoices";
-
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(service, "bucketName", BUCKET);
-        ReflectionTestUtils.setField(service, "baseUrl", BASE_URL);
-    }
+    private static final String BUCKET_KEY = "2024/01/15/invoice-INV-001-uuid.pdf";
+    private static final String FILE_URL   = "http://localhost:9001/invoices/" + BUCKET_KEY;
 
     @Test
     @DisplayName("generatePdf() uploads to MinIO and returns COMPLETED document")
@@ -56,21 +42,19 @@ class InvoicePdfDocumentServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
                 .thenReturn(pdfBytes);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(BUCKET_KEY);
+        when(pdfStoragePort.resolveUrl(BUCKET_KEY)).thenReturn(FILE_URL);
 
         InvoicePdfDocument result = service.generatePdf("inv-001", "INV-001", "<xml/>", "{}");
 
         assertThat(result.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
         assertThat(result.getFileSize()).isEqualTo(5000L);
-        assertThat(result.getDocumentUrl()).startsWith(BASE_URL + "/");
-        assertThat(result.getDocumentPath()).isNotBlank();
+        assertThat(result.getDocumentUrl()).isEqualTo(FILE_URL);
+        assertThat(result.getDocumentPath()).isEqualTo(BUCKET_KEY);
         assertThat(result.isXmlEmbedded()).isTrue();
 
-        ArgumentCaptor<PutObjectRequest> putCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3Client).putObject(putCaptor.capture(), any(RequestBody.class));
-        assertThat(putCaptor.getValue().bucket()).isEqualTo(BUCKET);
-        assertThat(putCaptor.getValue().contentType()).isEqualTo("application/pdf");
+        verify(pdfStoragePort).store(eq("INV-001"), any());
+        verify(pdfStoragePort).resolveUrl(BUCKET_KEY);
     }
 
     @Test
@@ -86,7 +70,7 @@ class InvoicePdfDocumentServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(GenerationStatus.FAILED);
         assertThat(result.getErrorMessage()).isNotBlank();
-        verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+        verify(pdfStoragePort, never()).store(anyString(), any());
     }
 
     @Test
@@ -96,15 +80,13 @@ class InvoicePdfDocumentServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
                 .thenReturn(pdfBytes);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(BUCKET_KEY);
+        when(pdfStoragePort.resolveUrl(BUCKET_KEY)).thenReturn(FILE_URL);
 
         InvoicePdfDocument result = service.generatePdf("inv-001", "INV-001", "<xml/>", "{}");
 
-        assertThat(result.getDocumentPath()).matches("\\d{4}/\\d{2}/\\d{2}/invoice-.+\\.pdf");
-        assertThat(result.getDocumentUrl())
-                .startsWith(BASE_URL + "/")
-                .endsWith(result.getDocumentPath());
+        assertThat(result.getDocumentPath()).isEqualTo(BUCKET_KEY);
+        assertThat(result.getDocumentUrl()).isEqualTo(FILE_URL);
     }
 
     @Test
@@ -113,8 +95,8 @@ class InvoicePdfDocumentServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
                 .thenReturn(new byte[1000]);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(BUCKET_KEY);
+        when(pdfStoragePort.resolveUrl(BUCKET_KEY)).thenReturn(FILE_URL);
 
         service.generatePdf("inv-001", "INV-001", "<xml/>", "{}");
 
@@ -123,24 +105,17 @@ class InvoicePdfDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("deletePdfFile() sends DeleteObjectRequest to S3")
+    @DisplayName("deletePdfFile() delegates to PdfStoragePort.delete()")
     void testDeletePdfFile_Success() {
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class)))
-                .thenReturn(DeleteObjectResponse.builder().build());
+        service.deletePdfFile(BUCKET_KEY);
 
-        service.deletePdfFile("2024/01/15/invoice-INV-001-abc.pdf");
-
-        ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
-        verify(s3Client).deleteObject(captor.capture());
-        assertThat(captor.getValue().bucket()).isEqualTo(BUCKET);
-        assertThat(captor.getValue().key()).isEqualTo("2024/01/15/invoice-INV-001-abc.pdf");
+        verify(pdfStoragePort).delete(BUCKET_KEY);
     }
 
     @Test
-    @DisplayName("deletePdfFile() wraps S3 exception in RuntimeException")
-    void testDeletePdfFile_S3Fails() {
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class)))
-                .thenThrow(new RuntimeException("S3 unavailable"));
+    @DisplayName("deletePdfFile() wraps storage exception in RuntimeException")
+    void testDeletePdfFile_StorageFails() {
+        doThrow(new RuntimeException("S3 unavailable")).when(pdfStoragePort).delete(anyString());
 
         assertThatThrownBy(() -> service.deletePdfFile("some/key.pdf"))
                 .isInstanceOf(RuntimeException.class)

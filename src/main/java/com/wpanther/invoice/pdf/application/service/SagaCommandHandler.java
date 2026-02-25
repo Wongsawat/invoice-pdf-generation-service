@@ -1,17 +1,18 @@
 package com.wpanther.invoice.pdf.application.service;
 
+import com.wpanther.invoice.pdf.application.port.out.PdfEventPort;
+import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
-import com.wpanther.invoice.pdf.infrastructure.messaging.EventPublisher;
-import com.wpanther.invoice.pdf.infrastructure.messaging.SagaReplyPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
@@ -24,8 +25,8 @@ public class SagaCommandHandler {
 
     private final InvoicePdfDocumentRepository repository;
     private final InvoicePdfDocumentService pdfDocumentService;
-    private final SagaReplyPublisher sagaReplyPublisher;
-    private final EventPublisher eventPublisher;
+    private final SagaReplyPort sagaReplyPublisher;
+    private final PdfEventPort eventPublisher;
     private final RestTemplate restTemplate;
 
     @Value("${app.pdf.generation.max-retries:3}")
@@ -197,6 +198,28 @@ public class SagaCommandHandler {
         int targetCount = previous.get().getRetryCount() + 1;
         while (document.getRetryCount() < targetCount) {
             document.incrementRetryCount();
+        }
+    }
+
+    /**
+     * Best-effort failure notification for messages that were routed to the DLQ after Camel
+     * exhausted its retry budget.  Runs in its own transaction (REQUIRES_NEW) so a previously
+     * rolled-back outer transaction does not prevent the outbox write.
+     * <p>
+     * If this also fails (e.g. DB is down) we log and swallow — the orchestrator must rely on
+     * its saga-timeout mechanism in that case.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void publishOrchestrationFailure(ProcessInvoicePdfCommand command, Throwable cause) {
+        try {
+            String error = "Message routed to DLQ after retry exhaustion: " + describeException((Exception) cause);
+            sagaReplyPublisher.publishFailure(
+                    command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
+            log.error("Published FAILURE reply after DLQ routing for saga {} invoice {}",
+                    command.getSagaId(), command.getInvoiceNumber());
+        } catch (Exception e) {
+            log.error("Cannot notify orchestrator of DLQ failure for saga {} — orchestrator must timeout",
+                    command.getSagaId(), e);
         }
     }
 

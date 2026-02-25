@@ -2,6 +2,7 @@ package com.wpanther.invoice.pdf.infrastructure.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfReplyEvent;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
@@ -20,7 +21,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class SagaReplyPublisher {
+public class SagaReplyPublisher implements SagaReplyPort {
 
     private static final String REPLY_TOPIC = "saga.reply.invoice-pdf";
     private static final String AGGREGATE_TYPE = "InvoicePdfDocument";

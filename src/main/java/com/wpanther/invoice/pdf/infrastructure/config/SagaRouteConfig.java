@@ -4,6 +4,7 @@ import com.wpanther.invoice.pdf.application.service.SagaCommandHandler;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +50,10 @@ public class SagaRouteConfig extends RouteBuilder {
     @Override
     public void configure() throws Exception {
 
-        // Global error handler - Dead Letter Channel with retries
+        // Global error handler: Dead Letter Channel with retries + saga orchestrator notification.
+        // onPrepareFailure is invoked once when all retries are exhausted, just before the message
+        // is sent to the DLQ.  If the body was already deserialized (failure happened after unmarshal)
+        // we publish a FAILURE reply in a new transaction so the orchestrator is not left waiting.
         errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=" + kafkaBrokers)
                         .maximumRedeliveries(3)
                         .redeliveryDelay(1000)
@@ -57,7 +61,19 @@ public class SagaRouteConfig extends RouteBuilder {
                         .backOffMultiplier(2)
                         .maximumRedeliveryDelay(10000)
                         .logExhausted(true)
-                        .logStackTrace(true));
+                        .logStackTrace(true)
+                        .onPrepareFailure(exchange -> {
+                            Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+                            Object body = exchange.getIn().getBody();
+                            if (body instanceof ProcessInvoicePdfCommand cmd) {
+                                log.error("DLQ: notifying orchestrator of retry exhaustion for saga {} invoice {}",
+                                        cmd.getSagaId(), cmd.getInvoiceNumber());
+                                sagaCommandHandler.publishOrchestrationFailure(cmd, cause);
+                            } else {
+                                log.error("DLQ: cannot notify orchestrator — body not deserialized ({})",
+                                        body == null ? "null" : body.getClass().getSimpleName());
+                            }
+                        }));
 
         // ============================================================
         // CONSUMER ROUTE: saga.command.invoice-pdf (from orchestrator)

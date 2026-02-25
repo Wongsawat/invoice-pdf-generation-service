@@ -1,12 +1,12 @@
 package com.wpanther.invoice.pdf.application.service;
 
+import com.wpanther.invoice.pdf.application.port.out.PdfEventPort;
+import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
-import com.wpanther.invoice.pdf.infrastructure.messaging.EventPublisher;
-import com.wpanther.invoice.pdf.infrastructure.messaging.SagaReplyPublisher;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,10 +37,10 @@ class SagaCommandHandlerTest {
     private InvoicePdfDocumentService pdfDocumentService;
 
     @Mock
-    private SagaReplyPublisher sagaReplyPublisher;
+    private SagaReplyPort sagaReplyPublisher;
 
     @Mock
-    private EventPublisher eventPublisher;
+    private PdfEventPort eventPublisher;
 
     @Mock
     private RestTemplate restTemplate;

@@ -54,12 +54,12 @@ app:
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.invoice.dlq
   minio:
-    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9001}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
     bucket-name: ${MINIO_BUCKET_NAME:invoices}
     region: ${MINIO_REGION:us-east-1}
-    base-url: ${MINIO_BASE_URL:http://localhost:9000/invoices}
+    base-url: ${MINIO_BASE_URL:http://localhost:9001/invoices}
     path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
   pdf:
     generation:
