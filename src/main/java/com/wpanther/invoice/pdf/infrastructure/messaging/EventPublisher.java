@@ -29,6 +29,7 @@ public class EventPublisher implements PdfEventPort {
     /**
      * Publish PDF generated event to pdf.generated topic (for Notification Service).
      */
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPdfGenerated(InvoicePdfGeneratedEvent event) {
         Map<String, String> headers = Map.of(

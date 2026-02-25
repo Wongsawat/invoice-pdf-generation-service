@@ -188,6 +188,18 @@ public class InvoicePdfDocument {
     }
 
     /**
+     * Advance the retry count to {@code target} if it is not already there.
+     * Used by the application service when carrying forward the count from a
+     * previous failed attempt without knowing exactly how many times
+     * {@link #incrementRetryCount()} has been called.
+     */
+    public void incrementRetryCountTo(int target) {
+        if (this.retryCount < target) {
+            this.retryCount = target;
+        }
+    }
+
+    /**
      * Builder for InvoicePdfDocument
      */
     public static class Builder {

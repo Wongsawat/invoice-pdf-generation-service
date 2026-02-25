@@ -29,6 +29,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
 
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishSuccess(String sagaId, SagaStep sagaStep, String correlationId, String pdfUrl, Long pdfSize) {
         InvoicePdfReplyEvent reply = InvoicePdfReplyEvent.success(sagaId, sagaStep, correlationId, pdfUrl, pdfSize);
@@ -51,6 +52,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
         log.info("Published SUCCESS saga reply for saga {} step {} with pdfUrl={}", sagaId, sagaStep, pdfUrl);
     }
 
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         InvoicePdfReplyEvent reply = InvoicePdfReplyEvent.failure(sagaId, sagaStep, correlationId, errorMessage);
@@ -73,6 +75,7 @@ public class SagaReplyPublisher implements SagaReplyPort {
         log.info("Published FAILURE saga reply for saga {} step {}: {}", sagaId, sagaStep, errorMessage);
     }
 
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
         InvoicePdfReplyEvent reply = InvoicePdfReplyEvent.compensated(sagaId, sagaStep, correlationId);

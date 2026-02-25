@@ -19,13 +19,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class JpaInvoicePdfDocumentRepositoryImplTest {
+class InvoicePdfDocumentRepositoryAdapterTest {
 
     @Mock
     private JpaInvoicePdfDocumentRepository jpaRepository;
 
     @InjectMocks
-    private JpaInvoicePdfDocumentRepositoryImpl repository;
+    private InvoicePdfDocumentRepositoryAdapter repository;
 
     private UUID id;
     private InvoicePdfDocument domain;

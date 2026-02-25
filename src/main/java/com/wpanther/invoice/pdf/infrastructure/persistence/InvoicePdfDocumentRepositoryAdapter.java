@@ -9,13 +9,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * JPA implementation of the domain InvoicePdfDocumentRepository.
+ * Ports-and-adapters JPA adapter for the domain {@link InvoicePdfDocumentRepository} port.
  * Owns all entity↔domain mapping, keeping infrastructure details out of
  * the application and domain layers.
+ *
+ * <p>Named {@code InvoicePdfDocumentRepositoryAdapter} (not {@code ...Impl}) to avoid
+ * Spring Data JPA's {@code {RepositoryName}Impl} naming convention, which would
+ * incorrectly treat this class as a custom-implementation fragment of
+ * {@link JpaInvoicePdfDocumentRepository} and create a circular dependency.
  */
 @Repository
 @RequiredArgsConstructor
-public class JpaInvoicePdfDocumentRepositoryImpl implements InvoicePdfDocumentRepository {
+public class InvoicePdfDocumentRepositoryAdapter implements InvoicePdfDocumentRepository {
 
     private final JpaInvoicePdfDocumentRepository jpaRepository;
 

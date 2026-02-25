@@ -166,10 +166,7 @@ public class InvoicePdfDocumentService {
 
     private void applyRetryCount(InvoicePdfDocument doc, int previousRetryCount) {
         if (previousRetryCount < 0) return;
-        int target = previousRetryCount + 1;
-        while (doc.getRetryCount() < target) {
-            doc.incrementRetryCount();
-        }
+        doc.incrementRetryCountTo(previousRetryCount + 1);
     }
 
     private InvoicePdfGeneratedEvent buildGeneratedEvent(InvoicePdfDocument doc,
