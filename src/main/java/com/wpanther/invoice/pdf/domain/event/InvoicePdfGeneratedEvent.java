@@ -1,20 +1,24 @@
 package com.wpanther.invoice.pdf.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.wpanther.saga.domain.model.IntegrationEvent;
+import com.wpanther.saga.domain.model.TraceEvent;
 import lombok.Getter;
 
 import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Event published when an invoice PDF has been generated
+ * Event published when an invoice PDF has been generated.
+ * Consumed by notification-service.
  */
 @Getter
-public class InvoicePdfGeneratedEvent extends IntegrationEvent {
+public class InvoicePdfGeneratedEvent extends TraceEvent {
 
     private static final String EVENT_TYPE = "pdf.generated.invoice";
+    private static final String SOURCE = "invoice-pdf-generation-service";
+    private static final String TRACE_TYPE = "PDF_GENERATED";
 
     @JsonProperty("documentId")
     private final String documentId;
@@ -34,10 +38,9 @@ public class InvoicePdfGeneratedEvent extends IntegrationEvent {
     @JsonProperty("xmlEmbedded")
     private final boolean xmlEmbedded;
 
-    @JsonProperty("correlationId")
-    private final String correlationId;
-
-    // Default constructor - calls super() for auto-generated metadata
+    /**
+     * Convenience constructor. correlationId is stored as sagaId in TraceEvent.
+     */
     public InvoicePdfGeneratedEvent(
             String documentId,
             String invoiceId,
@@ -47,14 +50,21 @@ public class InvoicePdfGeneratedEvent extends IntegrationEvent {
             boolean xmlEmbedded,
             String correlationId
     ) {
-        super();
+        super(correlationId, SOURCE, TRACE_TYPE, null);
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
-        this.correlationId = correlationId;
+    }
+
+    /**
+     * Returns the correlation ID (stored as sagaId in TraceEvent).
+     */
+    @JsonIgnore
+    public String getCorrelationId() {
+        return getSagaId();
     }
 
     @Override
@@ -62,28 +72,29 @@ public class InvoicePdfGeneratedEvent extends IntegrationEvent {
         return EVENT_TYPE;
     }
 
-    // JsonCreator constructor for Kafka deserialization
     @JsonCreator
     public InvoicePdfGeneratedEvent(
             @JsonProperty("eventId") UUID eventId,
             @JsonProperty("occurredAt") Instant occurredAt,
             @JsonProperty("eventType") String eventType,
             @JsonProperty("version") int version,
+            @JsonProperty("sagaId") String sagaId,
+            @JsonProperty("source") String source,
+            @JsonProperty("traceType") String traceType,
+            @JsonProperty("context") String context,
             @JsonProperty("documentId") String documentId,
             @JsonProperty("invoiceId") String invoiceId,
             @JsonProperty("invoiceNumber") String invoiceNumber,
             @JsonProperty("documentUrl") String documentUrl,
             @JsonProperty("fileSize") long fileSize,
-            @JsonProperty("xmlEmbedded") boolean xmlEmbedded,
-            @JsonProperty("correlationId") String correlationId
+            @JsonProperty("xmlEmbedded") boolean xmlEmbedded
     ) {
-        super(eventId, occurredAt, eventType, version);
+        super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
-        this.correlationId = correlationId;
     }
 }

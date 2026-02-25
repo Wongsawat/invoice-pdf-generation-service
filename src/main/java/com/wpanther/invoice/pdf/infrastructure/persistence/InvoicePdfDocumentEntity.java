@@ -53,6 +53,9 @@ public class InvoicePdfDocumentEntity {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(name = "retry_count")
+    private Integer retryCount;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -73,6 +76,9 @@ public class InvoicePdfDocumentEntity {
         }
         if (xmlEmbedded == null) {
             xmlEmbedded = false;
+        }
+        if (retryCount == null) {
+            retryCount = 0;
         }
     }
 }

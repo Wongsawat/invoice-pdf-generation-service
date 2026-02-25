@@ -50,13 +50,20 @@ app:
     topics:
       saga-command-invoice-pdf: saga.command.invoice-pdf
       saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
-      pdf-generated: pdf.generated
+      pdf-generated: pdf.generated.invoice
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.invoice.dlq
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket-name: ${MINIO_BUCKET_NAME:invoices}
+    region: ${MINIO_REGION:us-east-1}
+    base-url: ${MINIO_BASE_URL:http://localhost:9000/invoices}
+    path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
   pdf:
-    storage:
-      path: ${PDF_STORAGE_PATH:/var/documents/invoices}
-      base-url: ${PDF_STORAGE_BASE_URL:http://localhost:8084}
+    generation:
+      max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
 
 # Eureka client configuration
 eureka:

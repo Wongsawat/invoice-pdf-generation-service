@@ -32,6 +32,9 @@ public class InvoicePdfDocument {
     private GenerationStatus status;
     private String errorMessage;
 
+    // Retry tracking
+    private int retryCount;
+
     // Timestamps
     private final LocalDateTime createdAt;
     private LocalDateTime completedAt;
@@ -47,6 +50,7 @@ public class InvoicePdfDocument {
         this.xmlEmbedded = builder.xmlEmbedded;
         this.status = builder.status != null ? builder.status : GenerationStatus.PENDING;
         this.errorMessage = builder.errorMessage;
+        this.retryCount = builder.retryCount;
         this.createdAt = builder.createdAt != null ? builder.createdAt : LocalDateTime.now();
         this.completedAt = builder.completedAt;
 
@@ -170,6 +174,18 @@ public class InvoicePdfDocument {
         return completedAt;
     }
 
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public boolean isMaxRetriesExceeded(int maxRetries) {
+        return this.retryCount >= maxRetries;
+    }
+
+    public void incrementRetryCount() {
+        this.retryCount++;
+    }
+
     /**
      * Builder for InvoicePdfDocument
      */
@@ -184,6 +200,7 @@ public class InvoicePdfDocument {
         private boolean xmlEmbedded;
         private GenerationStatus status;
         private String errorMessage;
+        private int retryCount;
         private LocalDateTime createdAt;
         private LocalDateTime completedAt;
 
@@ -234,6 +251,11 @@ public class InvoicePdfDocument {
 
         public Builder errorMessage(String errorMessage) {
             this.errorMessage = errorMessage;
+            return this;
+        }
+
+        public Builder retryCount(int retryCount) {
+            this.retryCount = retryCount;
             return this;
         }
 

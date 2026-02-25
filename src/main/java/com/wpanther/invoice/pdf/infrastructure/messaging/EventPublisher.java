@@ -36,12 +36,12 @@ public class EventPublisher {
         );
 
         outboxService.saveWithRouting(
-            event,
-            AGGREGATE_TYPE,
-            event.getInvoiceId(),
-            "pdf.generated",
-            event.getInvoiceId(),
-            toJson(headers)
+                event,
+                AGGREGATE_TYPE,
+                event.getInvoiceId(),
+                "pdf.generated.invoice",
+                event.getInvoiceId(),
+                toJson(headers)
         );
 
         log.info("Published InvoicePdfGeneratedEvent to outbox for notification: {}", event.getInvoiceNumber());

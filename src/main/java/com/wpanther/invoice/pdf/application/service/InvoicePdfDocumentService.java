@@ -2,23 +2,21 @@ package com.wpanther.invoice.pdf.application.service;
 
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
-import com.wpanther.invoice.pdf.infrastructure.persistence.InvoicePdfDocumentEntity;
 import com.wpanther.invoice.pdf.infrastructure.persistence.JpaInvoicePdfDocumentRepository;
+import com.wpanther.invoice.pdf.infrastructure.persistence.InvoicePdfDocumentEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/**
- * Application service for Invoice PDF document operations
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -26,16 +24,14 @@ public class InvoicePdfDocumentService {
 
     private final JpaInvoicePdfDocumentRepository repository;
     private final InvoicePdfGenerationService pdfGenerationService;
+    private final S3Client s3Client;
 
-    @Value("${app.pdf.storage.path:/var/documents/invoices}")
-    private String storagePath;
+    @Value("${app.minio.bucket-name}")
+    private String bucketName;
 
-    @Value("${app.pdf.storage.base-url:http://localhost:8084}")
+    @Value("${app.minio.base-url}")
     private String baseUrl;
 
-    /**
-     * Generate PDF document for invoice
-     */
     @Transactional
     public InvoicePdfDocument generatePdf(
         String invoiceId,
@@ -45,35 +41,29 @@ public class InvoicePdfDocumentService {
     ) {
         log.info("Generating PDF for invoice: {}", invoiceNumber);
 
-        // Create PDF document aggregate
         InvoicePdfDocument document = InvoicePdfDocument.builder()
             .invoiceId(invoiceId)
             .invoiceNumber(invoiceNumber)
             .build();
 
-        // Save initial state
         document = saveDomain(document);
 
         try {
-            // Start generation
             document.startGeneration();
             document = saveDomain(document);
 
-            // Generate PDF bytes
             byte[] pdfBytes = pdfGenerationService.generatePdf(
                 invoiceNumber, xmlContent, invoiceDataJson);
 
-            // Store PDF file
-            String filePath = saveToFileSystem(invoiceNumber, pdfBytes);
-            String fileUrl = generateUrl(filePath);
+            String s3Key = uploadToMinIO(invoiceNumber, pdfBytes);
+            String fileUrl = baseUrl + "/" + s3Key;
 
-            // Mark as completed
-            document.markCompleted(filePath, fileUrl, pdfBytes.length);
+            document.markCompleted(s3Key, fileUrl, pdfBytes.length);
             document.markXmlEmbedded();
             document = saveDomain(document);
 
-            log.info("Successfully generated PDF for invoice: {} (size: {} bytes)",
-                invoiceNumber, pdfBytes.length);
+            log.info("Successfully generated and uploaded PDF for invoice: {} (size: {} bytes, key: {})",
+                invoiceNumber, pdfBytes.length, s3Key);
 
             return document;
 
@@ -85,40 +75,41 @@ public class InvoicePdfDocumentService {
         }
     }
 
-    /**
-     * Save PDF bytes to filesystem
-     */
-    private String saveToFileSystem(String invoiceNumber, byte[] pdfBytes) throws Exception {
-        // Create directory structure: storage/YYYY/MM/DD/
+    private String uploadToMinIO(String invoiceNumber, byte[] pdfBytes) {
         LocalDate now = LocalDate.now();
-        Path dir = Paths.get(storagePath, String.valueOf(now.getYear()),
-            String.format("%02d", now.getMonthValue()),
-            String.format("%02d", now.getDayOfMonth()));
+        String fileName = String.format("invoice-%s-%s.pdf",
+            invoiceNumber.replaceAll("[^a-zA-Z0-9\\-_]", "_"),
+            UUID.randomUUID());
+        String s3Key = String.format("%04d/%02d/%02d/%s",
+            now.getYear(), now.getMonthValue(), now.getDayOfMonth(), fileName);
 
-        Files.createDirectories(dir);
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+            .bucket(bucketName)
+            .key(s3Key)
+            .contentType("application/pdf")
+            .contentLength((long) pdfBytes.length)
+            .build();
 
-        // Save file
-        String fileName = String.format("invoice-%s-%s.pdf", invoiceNumber, UUID.randomUUID());
-        Path filePath = dir.resolve(fileName);
-        Files.write(filePath, pdfBytes);
+        s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
+        log.debug("Uploaded PDF to MinIO: bucket={}, key={}", bucketName, s3Key);
 
-        log.debug("Saved PDF to: {}", filePath);
-
-        return filePath.toString();
+        return s3Key;
     }
 
-    /**
-     * Generate URL for accessing the document
-     */
-    private String generateUrl(String filePath) {
-        // Convert filesystem path to URL path
-        String relativePath = filePath.replace(storagePath, "").replace("\\", "/");
-        return baseUrl + "/documents" + relativePath;
+    public void deletePdfFile(String s3Key) {
+        try {
+            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                .bucket(bucketName)
+                .key(s3Key)
+                .build();
+            s3Client.deleteObject(deleteRequest);
+            log.info("Deleted PDF from MinIO: bucket={}, key={}", bucketName, s3Key);
+        } catch (Exception e) {
+            log.error("Failed to delete PDF from MinIO: key={}", s3Key, e);
+            throw new RuntimeException("Failed to delete PDF from MinIO", e);
+        }
     }
 
-    /**
-     * Save domain model to database
-     */
     private InvoicePdfDocument saveDomain(InvoicePdfDocument document) {
         InvoicePdfDocumentEntity entity = InvoicePdfDocumentEntity.builder()
             .id(document.getId())
@@ -131,6 +122,7 @@ public class InvoicePdfDocumentService {
             .xmlEmbedded(document.isXmlEmbedded())
             .status(document.getStatus())
             .errorMessage(document.getErrorMessage())
+            .retryCount(document.getRetryCount())
             .createdAt(document.getCreatedAt())
             .completedAt(document.getCompletedAt())
             .build();
@@ -148,6 +140,7 @@ public class InvoicePdfDocumentService {
             .xmlEmbedded(entity.getXmlEmbedded())
             .status(entity.getStatus())
             .errorMessage(entity.getErrorMessage())
+            .retryCount(entity.getRetryCount() != null ? entity.getRetryCount() : 0)
             .createdAt(entity.getCreatedAt())
             .completedAt(entity.getCompletedAt())
             .build();
