@@ -80,7 +80,6 @@ class InvoicePdfDocumentTest {
         assertThat(doc.getFileSize()).isEqualTo(12345L);
         assertThat(doc.getCompletedAt()).isNotNull();
         assertThat(doc.isCompleted()).isTrue();
-        assertThat(doc.isSuccessful()).isTrue();
         assertThat(doc.isFailed()).isFalse();
     }
 

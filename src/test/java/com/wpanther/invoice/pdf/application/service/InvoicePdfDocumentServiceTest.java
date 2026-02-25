@@ -65,15 +65,15 @@ class InvoicePdfDocumentServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("beginGeneration() creates PENDING then GENERATING document")
-    void beginGeneration_savesTwice_pendingThenGenerating() {
+    @DisplayName("beginGeneration() creates GENERATING document with single save")
+    void beginGeneration_savesOnce_inGeneratingState() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         InvoicePdfDocument result = service.beginGeneration("inv-001", "INV-001");
 
         assertThat(result.getStatus()).isEqualTo(GenerationStatus.GENERATING);
         assertThat(result.getInvoiceId()).isEqualTo("inv-001");
-        verify(repository, times(2)).save(any());
+        verify(repository, times(1)).save(any());
     }
 
     // -------------------------------------------------------------------------

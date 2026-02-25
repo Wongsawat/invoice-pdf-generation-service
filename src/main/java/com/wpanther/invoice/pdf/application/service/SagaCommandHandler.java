@@ -204,7 +204,7 @@ public class SagaCommandHandler {
     public void publishOrchestrationFailure(ProcessInvoicePdfCommand command, Throwable cause) {
         try {
             String error = "Message routed to DLQ after retry exhaustion: "
-                    + describeException((Exception) cause);
+                    + describeThrowable(cause);
             sagaReplyPort.publishFailure(
                     command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
             log.error("Published FAILURE reply after DLQ routing for saga {} invoice {}",
@@ -216,7 +216,11 @@ public class SagaCommandHandler {
     }
 
     private String describeException(Exception e) {
-        String message = e.getMessage();
-        return e.getClass().getSimpleName() + (message != null ? ": " + message : "");
+        return describeThrowable(e);
+    }
+
+    private String describeThrowable(Throwable t) {
+        String message = t.getMessage();
+        return t.getClass().getSimpleName() + (message != null ? ": " + message : "");
     }
 }

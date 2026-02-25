@@ -49,7 +49,6 @@ public class InvoicePdfDocumentService {
                 .invoiceId(invoiceId)
                 .invoiceNumber(invoiceNumber)
                 .build();
-        document = repository.save(document);
         document.startGeneration();
         return repository.save(document);
     }

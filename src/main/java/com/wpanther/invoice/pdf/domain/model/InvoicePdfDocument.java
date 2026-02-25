@@ -126,13 +126,6 @@ public class InvoicePdfDocument {
         return status == GenerationStatus.FAILED;
     }
 
-    /**
-     * Check if generation is successful
-     */
-    public boolean isSuccessful() {
-        return status == GenerationStatus.COMPLETED;
-    }
-
     // Getters
     public UUID getId() {
         return id;
