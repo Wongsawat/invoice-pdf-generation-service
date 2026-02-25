@@ -17,11 +17,18 @@ spring:
   flyway:
     enabled: false
 
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
 # Apache Camel - disabled for unit tests
 camel:
   springboot:
     name: invoice-pdf-generation-camel-test
     main-run-controller: false
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: true
 
 # Application configuration for tests
 app:
@@ -30,14 +37,25 @@ app:
     consumer:
       group-id: invoice-pdf-generation-service-test
     topics:
-      xml-signed-invoice: xml.signed.invoice
-      pdf-generated: pdf.generated
+      saga-command-invoice-pdf: saga.command.invoice-pdf
+      saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
+      pdf-generated: pdf.generated.invoice
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.invoice.dlq
+  minio:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket-name: invoices-test
+    region: us-east-1
+    base-url: http://localhost:9000/invoices-test
+    path-style-access: true
   pdf:
-    storage:
-      path: /tmp/test-documents/invoices
-      base-url: http://localhost:8084
+    generation:
+      max-retries: 3
+  rest-client:
+    connect-timeout: 5000
+    read-timeout: 30000
 
 # Disable Eureka for tests
 eureka:
