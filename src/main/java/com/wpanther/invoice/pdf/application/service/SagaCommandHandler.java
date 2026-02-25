@@ -1,12 +1,12 @@
 package com.wpanther.invoice.pdf.application.service;
 
-import com.wpanther.invoice.pdf.application.port.out.PdfEventPort;
+import com.wpanther.invoice.pdf.application.port.out.PdfStoragePort;
 import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
-import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
+import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -18,6 +18,22 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
+/**
+ * Orchestrates invoice PDF generation in response to saga commands.
+ *
+ * <h3>Transaction boundary design</h3>
+ * <p>This class does NOT hold an open DB transaction during long-running work.
+ * Instead it delegates every short DB operation to {@link InvoicePdfDocumentService},
+ * whose methods each open and commit their own focused transaction.  The sequence is:
+ * <ol>
+ *   <li><b>Short tx 1</b> — {@code pdfDocumentService.beginGeneration()}: create PENDING → GENERATING.</li>
+ *   <li><b>No transaction</b> — download signed XML, run FOP+PDFBox, upload to MinIO.</li>
+ *   <li><b>Short tx 2</b> — {@code pdfDocumentService.completeGenerationAndPublish()} or
+ *       {@code failGenerationAndPublish()}: mark COMPLETED/FAILED and write outbox events atomically.</li>
+ * </ol>
+ * <p>Hikari connections are never held during CPU or network I/O, which eliminates pool
+ * exhaustion under concurrent load.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -25,18 +41,19 @@ public class SagaCommandHandler {
 
     private final InvoicePdfDocumentRepository repository;
     private final InvoicePdfDocumentService pdfDocumentService;
-    private final SagaReplyPort sagaReplyPublisher;
-    private final PdfEventPort eventPublisher;
+    private final InvoicePdfGenerationService pdfGenerationService;
+    private final PdfStoragePort pdfStoragePort;
+    private final SagaReplyPort sagaReplyPort;   // used only by publishOrchestrationFailure
     private final RestTemplate restTemplate;
 
     @Value("${app.pdf.generation.max-retries:3}")
     private int maxRetries;
 
     /**
-     * Handle a ProcessInvoicePdfCommand from saga orchestrator.
-     * Generates PDF and sends a SUCCESS or FAILURE reply.
+     * Handle a ProcessInvoicePdfCommand from the saga orchestrator.
+     * No {@code @Transactional} — DB work is performed in short, focused transactions
+     * via {@link InvoicePdfDocumentService}.
      */
-    @Transactional
     public void handleProcessCommand(ProcessInvoicePdfCommand command) {
         MDC.put("sagaId", command.getSagaId());
         MDC.put("correlationId", command.getCorrelationId());
@@ -44,92 +61,84 @@ public class SagaCommandHandler {
         try {
             log.info("Handling ProcessInvoicePdfCommand for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceNumber());
-
             try {
                 Optional<InvoicePdfDocument> existing =
                         repository.findByInvoiceId(command.getInvoiceId());
 
-                // Idempotency: already completed — re-publish events and reply SUCCESS
+                // Idempotency: already completed — re-publish and reply SUCCESS
                 if (existing.isPresent() && existing.get().isCompleted()) {
-                    log.warn("Invoice PDF already generated for {}, sending SUCCESS reply",
-                            command.getInvoiceNumber());
-                    InvoicePdfDocument document = existing.get();
-                    publishEvents(document, command);
-                    sagaReplyPublisher.publishSuccess(
-                            command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                            document.getDocumentUrl(), document.getFileSize());
+                    pdfDocumentService.publishIdempotentSuccess(existing.get(), command);
                     return;
                 }
 
-                // Retry limit check: use aggregate method
+                // Retry limit check
                 if (existing.isPresent() && existing.get().isFailed()) {
-                    InvoicePdfDocument failedDocument = existing.get();
-                    if (failedDocument.isMaxRetriesExceeded(maxRetries)) {
-                        log.error("Max retries ({}) exceeded for saga {} invoice {}",
-                                maxRetries, command.getSagaId(), command.getInvoiceNumber());
-                        sagaReplyPublisher.publishFailure(
-                                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                                "Maximum retry attempts exceeded");
+                    InvoicePdfDocument failed = existing.get();
+                    if (failed.isMaxRetriesExceeded(maxRetries)) {
+                        pdfDocumentService.publishRetryExhausted(command);
                         return;
                     }
-                    // Delete the failed record so generatePdf() can create a fresh one;
-                    // flush ensures the DELETE precedes the subsequent INSERT on the same invoiceId.
-                    repository.deleteById(failedDocument.getId());
-                    repository.flush();
+                    // Delete the failed record; flush enforces DELETE-before-INSERT ordering
+                    pdfDocumentService.deleteById(failed.getId());
                 }
 
-                // Validate and download signed XML from MinIO
+                // Validate signed XML URL
                 String signedXmlUrl = command.getSignedXmlUrl();
                 if (signedXmlUrl == null || signedXmlUrl.isBlank()) {
-                    throw new IllegalStateException("signedXmlUrl is null or blank in saga command");
-                }
-                String signedXml = restTemplate.getForObject(signedXmlUrl, String.class);
-                if (signedXml == null || signedXml.isBlank()) {
-                    throw new IllegalStateException("Failed to download signed XML from " + signedXmlUrl);
-                }
-
-                // Generate PDF — never throws; returns document in COMPLETED or FAILED state
-                InvoicePdfDocument document = pdfDocumentService.generatePdf(
-                        command.getInvoiceId(),
-                        command.getInvoiceNumber(),
-                        signedXml,
-                        command.getInvoiceDataJson());
-
-                // If generation failed, persist the correct retry count and send FAILURE reply
-                if (document.isFailed()) {
-                    carryForwardRetryCount(document, existing);
-                    repository.save(document);
-                    sagaReplyPublisher.publishFailure(
-                            command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                            document.getErrorMessage() != null
-                                    ? document.getErrorMessage()
-                                    : "PDF generation failed");
+                    pdfDocumentService.publishGenerationFailure(
+                            command, "signedXmlUrl is null or blank in saga command");
                     return;
                 }
 
-                // Carry forward the retry count from the previous failed attempt.
-                // The new document starts at retryCount=0; set it to previousCount+1
-                // so isMaxRetriesExceeded() fires correctly on the next saga retry.
-                if (existing.isPresent()) {
-                    carryForwardRetryCount(document, existing);
-                    document = repository.save(document);
+                // ── Short tx 1: create PENDING → GENERATING record ──────────────────
+                InvoicePdfDocument document = pdfDocumentService.beginGeneration(
+                        command.getInvoiceId(), command.getInvoiceNumber());
+                int previousRetryCount =
+                        existing.map(InvoicePdfDocument::getRetryCount).orElse(-1);
+                // ── Transaction committed ────────────────────────────────────────────
+
+                try {
+                    // ── NO TRANSACTION HELD HERE ────────────────────────────────────
+
+                    // Download signed XML (network I/O)
+                    String signedXml = restTemplate.getForObject(signedXmlUrl, String.class);
+                    if (signedXml == null || signedXml.isBlank()) {
+                        throw new IllegalStateException(
+                                "Failed to download signed XML from " + signedXmlUrl);
+                    }
+
+                    // Generate PDF bytes (CPU: FOP + PDFBox)
+                    byte[] pdfBytes = pdfGenerationService.generatePdf(
+                            command.getInvoiceNumber(), signedXml, command.getInvoiceDataJson());
+
+                    // Upload to MinIO (network I/O)
+                    String s3Key = pdfStoragePort.store(command.getInvoiceNumber(), pdfBytes);
+                    String fileUrl = pdfStoragePort.resolveUrl(s3Key);
+
+                    // ── END NO-TRANSACTION BLOCK ─────────────────────────────────────
+
+                    // ── Short tx 2 (success): mark COMPLETED + write outbox atomically
+                    pdfDocumentService.completeGenerationAndPublish(
+                            document.getId(), s3Key, fileUrl, pdfBytes.length,
+                            previousRetryCount, command);
+                    // ── Transaction committed ────────────────────────────────────────
+
+                    log.info("Successfully processed PDF generation for saga {} invoice {}",
+                            command.getSagaId(), command.getInvoiceNumber());
+
+                } catch (Exception e) {
+                    log.error("PDF generation/upload failed for saga {} invoice {}: {}",
+                            command.getSagaId(), command.getInvoiceNumber(), e.getMessage(), e);
+                    // ── Short tx 2 (failure): mark FAILED + write FAILURE reply atomically
+                    pdfDocumentService.failGenerationAndPublish(
+                            document.getId(), describeException(e), previousRetryCount, command);
+                    // ── Transaction committed ────────────────────────────────────────
                 }
 
-                // Publish events and send SUCCESS reply with MinIO URL for subsequent steps
-                publishEvents(document, command);
-                sagaReplyPublisher.publishSuccess(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        document.getDocumentUrl(), document.getFileSize());
-
-                log.info("Successfully processed invoice PDF generation for saga {} invoice {}",
-                        command.getSagaId(), command.getInvoiceNumber());
-
             } catch (Exception e) {
-                log.error("Failed to process invoice PDF generation for saga {} invoice {}: {}",
+                log.error("Unexpected error for saga {} invoice {}: {}",
                         command.getSagaId(), command.getInvoiceNumber(), e.getMessage(), e);
-                sagaReplyPublisher.publishFailure(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        describeException(e));
+                pdfDocumentService.publishGenerationFailure(command, describeException(e));
             }
         } finally {
             MDC.clear();
@@ -137,10 +146,10 @@ public class SagaCommandHandler {
     }
 
     /**
-     * Handle a CompensateInvoicePdfCommand from saga orchestrator.
-     * Deletes generated PDF document and sends a COMPENSATED reply.
+     * Handle a CompensateInvoicePdfCommand from the saga orchestrator.
+     * No {@code @Transactional} — DB delete and MinIO delete run independently so neither
+     * holds an open transaction during network I/O.
      */
-    @Transactional
     public void handleCompensation(CompensateInvoicePdfCommand command) {
         MDC.put("sagaId", command.getSagaId());
         MDC.put("correlationId", command.getCorrelationId());
@@ -148,37 +157,38 @@ public class SagaCommandHandler {
         try {
             log.info("Handling compensation for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceId());
-
             try {
                 Optional<InvoicePdfDocument> existing =
                         repository.findByInvoiceId(command.getInvoiceId());
 
                 if (existing.isPresent()) {
                     InvoicePdfDocument document = existing.get();
-                    // DB delete first: if this fails the transaction rolls back and the S3 object
-                    // remains intact — no orphaned DB record pointing to a missing file.
-                    // If DB delete succeeds but S3 delete fails below, we have an unreferenced S3
-                    // object. That is the lesser evil: it causes no functional harm and can be
-                    // cleaned up by a MinIO lifecycle expiry rule.
-                    repository.deleteById(document.getId());
+                    // Short tx: DB delete (if this rolls back, MinIO object remains intact)
+                    pdfDocumentService.deleteById(document.getId());
+                    // Outside tx: MinIO delete (orphaned object acceptable if this fails)
                     if (document.getDocumentPath() != null) {
-                        pdfDocumentService.deletePdfFile(document.getDocumentPath());
+                        try {
+                            pdfStoragePort.delete(document.getDocumentPath());
+                        } catch (Exception e) {
+                            log.warn("Failed to delete PDF from MinIO for saga {} key {}: {}",
+                                    command.getSagaId(), document.getDocumentPath(), e.getMessage());
+                        }
                     }
-                    log.info("Compensated InvoicePdfDocument {} for saga {}", document.getId(), command.getSagaId());
+                    log.info("Compensated InvoicePdfDocument {} for saga {}",
+                            document.getId(), command.getSagaId());
                 } else {
-                    log.info("No InvoicePdfDocument found for invoiceId {} - already compensated or never processed",
+                    log.info("No document found for invoiceId {} — already compensated or never processed",
                             command.getInvoiceId());
                 }
 
-                sagaReplyPublisher.publishCompensated(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId());
+                // Short tx: publish COMPENSATED reply
+                pdfDocumentService.publishCompensated(command);
 
             } catch (Exception e) {
-                log.error("Failed to compensate invoice PDF generation for saga {} invoice {}: {}",
+                log.error("Failed to compensate for saga {} invoice {}: {}",
                         command.getSagaId(), command.getInvoiceId(), e.getMessage(), e);
-                sagaReplyPublisher.publishFailure(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        "Compensation failed: " + describeException(e));
+                pdfDocumentService.publishCompensationFailure(
+                        command, "Compensation failed: " + describeException(e));
             }
         } finally {
             MDC.clear();
@@ -186,34 +196,16 @@ public class SagaCommandHandler {
     }
 
     /**
-     * Carry forward the retry count from the previous (deleted) failed document to the
-     * replacement document. The replacement always starts at retryCount=0; incrementing
-     * to previousCount+1 ensures isMaxRetriesExceeded() fires on the correct attempt.
-     */
-    private void carryForwardRetryCount(InvoicePdfDocument document,
-                                        Optional<InvoicePdfDocument> previous) {
-        if (previous.isEmpty()) {
-            return;
-        }
-        int targetCount = previous.get().getRetryCount() + 1;
-        while (document.getRetryCount() < targetCount) {
-            document.incrementRetryCount();
-        }
-    }
-
-    /**
-     * Best-effort failure notification for messages that were routed to the DLQ after Camel
-     * exhausted its retry budget.  Runs in its own transaction (REQUIRES_NEW) so a previously
+     * Best-effort failure notification when Camel routes a message to the DLQ after
+     * exhausting retries.  Runs in its own transaction (REQUIRES_NEW) so a previously
      * rolled-back outer transaction does not prevent the outbox write.
-     * <p>
-     * If this also fails (e.g. DB is down) we log and swallow — the orchestrator must rely on
-     * its saga-timeout mechanism in that case.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishOrchestrationFailure(ProcessInvoicePdfCommand command, Throwable cause) {
         try {
-            String error = "Message routed to DLQ after retry exhaustion: " + describeException((Exception) cause);
-            sagaReplyPublisher.publishFailure(
+            String error = "Message routed to DLQ after retry exhaustion: "
+                    + describeException((Exception) cause);
+            sagaReplyPort.publishFailure(
                     command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
             log.error("Published FAILURE reply after DLQ routing for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceNumber());
@@ -223,22 +215,8 @@ public class SagaCommandHandler {
         }
     }
 
-    /** Returns a non-null, human-readable description of an exception for saga reply messages. */
     private String describeException(Exception e) {
         String message = e.getMessage();
         return e.getClass().getSimpleName() + (message != null ? ": " + message : "");
-    }
-
-    private void publishEvents(InvoicePdfDocument document, ProcessInvoicePdfCommand command) {
-        InvoicePdfGeneratedEvent event = new InvoicePdfGeneratedEvent(
-                command.getDocumentId(),
-                document.getInvoiceId(),
-                document.getInvoiceNumber(),
-                document.getDocumentUrl(),
-                document.getFileSize(),
-                document.isXmlEmbedded(),
-                command.getCorrelationId()
-        );
-        eventPublisher.publishPdfGenerated(event);
     }
 }
