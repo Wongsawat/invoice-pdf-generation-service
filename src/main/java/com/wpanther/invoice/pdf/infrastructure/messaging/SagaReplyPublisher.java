@@ -1,6 +1,5 @@
 package com.wpanther.invoice.pdf.infrastructure.messaging;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfReplyEvent;
@@ -8,6 +7,7 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,15 +16,17 @@ import java.util.Map;
 
 /**
  * Publishes saga reply events via outbox pattern.
- * Replies are sent to orchestrator via saga.reply.invoice-pdf topic.
+ * Replies are sent to orchestrator via the configured saga reply topic.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class SagaReplyPublisher implements SagaReplyPort {
 
-    private static final String REPLY_TOPIC = "saga.reply.invoice-pdf";
     private static final String AGGREGATE_TYPE = "InvoicePdfDocument";
+
+    @Value("${app.kafka.topics.saga-reply-invoice-pdf}")
+    private String replyTopic;
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
@@ -44,9 +46,9 @@ public class SagaReplyPublisher implements SagaReplyPort {
                 reply,
                 AGGREGATE_TYPE,
                 sagaId,
-                REPLY_TOPIC,
+                replyTopic,
                 sagaId,
-                toJson(headers)
+                MessagingUtils.toJson(headers, objectMapper)
         );
 
         log.info("Published SUCCESS saga reply for saga {} step {} with pdfUrl={}", sagaId, sagaStep, pdfUrl);
@@ -67,9 +69,9 @@ public class SagaReplyPublisher implements SagaReplyPort {
                 reply,
                 AGGREGATE_TYPE,
                 sagaId,
-                REPLY_TOPIC,
+                replyTopic,
                 sagaId,
-                toJson(headers)
+                MessagingUtils.toJson(headers, objectMapper)
         );
 
         log.info("Published FAILURE saga reply for saga {} step {}: {}", sagaId, sagaStep, errorMessage);
@@ -90,20 +92,12 @@ public class SagaReplyPublisher implements SagaReplyPort {
                 reply,
                 AGGREGATE_TYPE,
                 sagaId,
-                REPLY_TOPIC,
+                replyTopic,
                 sagaId,
-                toJson(headers)
+                MessagingUtils.toJson(headers, objectMapper)
         );
 
         log.info("Published COMPENSATED saga reply for saga {} step {}", sagaId, sagaStep);
     }
 
-    private String toJson(Map<String, String> map) {
-        try {
-            return objectMapper.writeValueAsString(map);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize headers to JSON", e);
-            return null;
-        }
-    }
 }

@@ -232,6 +232,7 @@ public class SagaCommandHandler {
     }
 
     private String describeThrowable(Throwable t) {
+        if (t == null) return "unknown error";
         String message = t.getMessage();
         return t.getClass().getSimpleName() + (message != null ? ": " + message : "");
     }

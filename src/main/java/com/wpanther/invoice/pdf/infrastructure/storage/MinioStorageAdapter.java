@@ -34,6 +34,9 @@ public class MinioStorageAdapter implements PdfStoragePort {
     @Override
     @CircuitBreaker(name = "minio")
     public String store(String invoiceNumber, byte[] pdfBytes) {
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalArgumentException("pdfBytes cannot be null or empty");
+        }
         String key = buildKey(invoiceNumber);
 
         PutObjectRequest request = PutObjectRequest.builder()
@@ -44,7 +47,7 @@ public class MinioStorageAdapter implements PdfStoragePort {
                 .build();
 
         s3Client.putObject(request, RequestBody.fromBytes(pdfBytes));
-        log.debug("Uploaded PDF to MinIO: bucket={}, key={}", bucketName, key);
+        log.info("Uploaded PDF to MinIO: bucket={}, key={}, size={} bytes", bucketName, key, pdfBytes.length);
         return key;
     }
 

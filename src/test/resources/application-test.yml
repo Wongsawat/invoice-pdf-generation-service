@@ -39,6 +39,7 @@ app:
     topics:
       saga-command-invoice-pdf: saga.command.invoice-pdf
       saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
+      saga-reply-invoice-pdf: saga.reply.invoice-pdf
       pdf-generated: pdf.generated.invoice
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.invoice.dlq
