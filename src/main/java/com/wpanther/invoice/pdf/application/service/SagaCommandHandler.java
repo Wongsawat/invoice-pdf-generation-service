@@ -97,6 +97,7 @@ public class SagaCommandHandler {
                 // If generation failed, persist the correct retry count and send FAILURE reply
                 if (document.isFailed()) {
                     carryForwardRetryCount(document, existing);
+                    repository.save(document);
                     sagaReplyPublisher.publishFailure(
                             command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
                             document.getErrorMessage() != null

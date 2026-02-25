@@ -224,7 +224,7 @@ class SagaCommandHandlerTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("Should send FAILURE reply when generatePdf() returns FAILED document")
+    @DisplayName("Should send FAILURE reply and save retry count when generatePdf() returns FAILED document")
     void testHandleProcessCommand_GenerationFails() {
         ProcessInvoicePdfCommand command = createProcessCommand();
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
@@ -239,12 +239,49 @@ class SagaCommandHandlerTest {
                 .build();
         when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(failedDoc);
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         sagaCommandHandler.handleProcessCommand(command);
 
         verify(eventPublisher, never()).publishPdfGenerated(any());
         verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_INVOICE_PDF),
                 eq("corr-456"), eq("FOP transform failed"));
+        // retry count must be persisted so isMaxRetriesExceeded() works on next attempt
+        verify(repository).save(any());
+    }
+
+    @Test
+    @DisplayName("Should persist incremented retry count when retry attempt also fails")
+    void testHandleProcessCommand_RetryAttemptAlsoFails() {
+        ProcessInvoicePdfCommand command = createProcessCommand();
+        InvoicePdfDocument previousFailed = InvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .invoiceId("inv-001")
+                .invoiceNumber("INV-2024-001")
+                .status(GenerationStatus.FAILED)
+                .retryCount(1)
+                .build();
+        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(previousFailed));
+        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+        InvoicePdfDocument failedDoc = InvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .invoiceId("inv-001")
+                .invoiceNumber("INV-2024-001")
+                .status(GenerationStatus.FAILED)
+                .errorMessage("FOP transform failed again")
+                .retryCount(0)
+                .build();
+        when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(failedDoc);
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        sagaCommandHandler.handleProcessCommand(command);
+
+        // retryCount must be carried forward: previous(1) + 1 = 2, then saved
+        ArgumentCaptor<InvoicePdfDocument> captor = ArgumentCaptor.forClass(InvoicePdfDocument.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getRetryCount()).isEqualTo(2);
+        verify(sagaReplyPublisher).publishFailure(anyString(), any(), anyString(), anyString());
     }
 
     @Test
