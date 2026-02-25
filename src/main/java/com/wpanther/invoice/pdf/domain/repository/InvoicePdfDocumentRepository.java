@@ -28,4 +28,11 @@ public interface InvoicePdfDocumentRepository {
      * Delete by ID
      */
     void deleteById(UUID id);
+
+    /**
+     * Flush pending changes to the database.
+     * Required to order a DELETE before a subsequent INSERT on the same unique key
+     * within the same transaction (e.g., delete-then-recreate on saga retry).
+     */
+    void flush();
 }

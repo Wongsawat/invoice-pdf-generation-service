@@ -118,6 +118,14 @@ public class InvoicePdfDocument {
         this.xmlEmbedded = true;
     }
 
+    public boolean isCompleted() {
+        return status == GenerationStatus.COMPLETED;
+    }
+
+    public boolean isFailed() {
+        return status == GenerationStatus.FAILED;
+    }
+
     /**
      * Check if generation is successful
      */

@@ -64,6 +64,9 @@ app:
   pdf:
     generation:
       max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
+  rest-client:
+    connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
+    read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}
 
 # Eureka client configuration
 eureka:

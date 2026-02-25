@@ -1,9 +1,8 @@
 package com.wpanther.invoice.pdf.application.service;
 
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
+import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
-import com.wpanther.invoice.pdf.infrastructure.persistence.JpaInvoicePdfDocumentRepository;
-import com.wpanther.invoice.pdf.infrastructure.persistence.InvoicePdfDocumentEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +21,7 @@ import java.util.UUID;
 @Slf4j
 public class InvoicePdfDocumentService {
 
-    private final JpaInvoicePdfDocumentRepository repository;
+    private final InvoicePdfDocumentRepository repository;
     private final InvoicePdfGenerationService pdfGenerationService;
     private final S3Client s3Client;
 
@@ -46,11 +45,11 @@ public class InvoicePdfDocumentService {
             .invoiceNumber(invoiceNumber)
             .build();
 
-        document = saveDomain(document);
+        document = repository.save(document);
 
         try {
             document.startGeneration();
-            document = saveDomain(document);
+            document = repository.save(document);
 
             byte[] pdfBytes = pdfGenerationService.generatePdf(
                 invoiceNumber, xmlContent, invoiceDataJson);
@@ -60,7 +59,7 @@ public class InvoicePdfDocumentService {
 
             document.markCompleted(s3Key, fileUrl, pdfBytes.length);
             document.markXmlEmbedded();
-            document = saveDomain(document);
+            document = repository.save(document);
 
             log.info("Successfully generated and uploaded PDF for invoice: {} (size: {} bytes, key: {})",
                 invoiceNumber, pdfBytes.length, s3Key);
@@ -70,8 +69,8 @@ public class InvoicePdfDocumentService {
         } catch (Exception e) {
             log.error("Failed to generate PDF for invoice: {}", invoiceNumber, e);
             document.markFailed(e.getMessage());
-            saveDomain(document);
-            throw new RuntimeException("Invoice PDF generation failed", e);
+            document = repository.save(document);
+            return document;
         }
     }
 
@@ -108,41 +107,5 @@ public class InvoicePdfDocumentService {
             log.error("Failed to delete PDF from MinIO: key={}", s3Key, e);
             throw new RuntimeException("Failed to delete PDF from MinIO", e);
         }
-    }
-
-    private InvoicePdfDocument saveDomain(InvoicePdfDocument document) {
-        InvoicePdfDocumentEntity entity = InvoicePdfDocumentEntity.builder()
-            .id(document.getId())
-            .invoiceId(document.getInvoiceId())
-            .invoiceNumber(document.getInvoiceNumber())
-            .documentPath(document.getDocumentPath())
-            .documentUrl(document.getDocumentUrl())
-            .fileSize(document.getFileSize())
-            .mimeType(document.getMimeType())
-            .xmlEmbedded(document.isXmlEmbedded())
-            .status(document.getStatus())
-            .errorMessage(document.getErrorMessage())
-            .retryCount(document.getRetryCount())
-            .createdAt(document.getCreatedAt())
-            .completedAt(document.getCompletedAt())
-            .build();
-
-        entity = repository.save(entity);
-
-        return InvoicePdfDocument.builder()
-            .id(entity.getId())
-            .invoiceId(entity.getInvoiceId())
-            .invoiceNumber(entity.getInvoiceNumber())
-            .documentPath(entity.getDocumentPath())
-            .documentUrl(entity.getDocumentUrl())
-            .fileSize(entity.getFileSize() != null ? entity.getFileSize() : 0)
-            .mimeType(entity.getMimeType())
-            .xmlEmbedded(entity.getXmlEmbedded())
-            .status(entity.getStatus())
-            .errorMessage(entity.getErrorMessage())
-            .retryCount(entity.getRetryCount() != null ? entity.getRetryCount() : 0)
-            .createdAt(entity.getCreatedAt())
-            .completedAt(entity.getCompletedAt())
-            .build();
     }
 }

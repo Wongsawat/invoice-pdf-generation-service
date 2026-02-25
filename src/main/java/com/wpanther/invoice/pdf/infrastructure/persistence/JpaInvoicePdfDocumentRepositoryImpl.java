@@ -1,0 +1,88 @@
+package com.wpanther.invoice.pdf.infrastructure.persistence;
+
+import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
+import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * JPA implementation of the domain InvoicePdfDocumentRepository.
+ * Owns all entity↔domain mapping, keeping infrastructure details out of
+ * the application and domain layers.
+ */
+@Repository
+@RequiredArgsConstructor
+public class JpaInvoicePdfDocumentRepositoryImpl implements InvoicePdfDocumentRepository {
+
+    private final JpaInvoicePdfDocumentRepository jpaRepository;
+
+    @Override
+    public InvoicePdfDocument save(InvoicePdfDocument document) {
+        InvoicePdfDocumentEntity entity = toEntity(document);
+        entity = jpaRepository.save(entity);
+        return toDomain(entity);
+    }
+
+    @Override
+    public Optional<InvoicePdfDocument> findById(UUID id) {
+        return jpaRepository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<InvoicePdfDocument> findByInvoiceId(String invoiceId) {
+        return jpaRepository.findByInvoiceId(invoiceId).map(this::toDomain);
+    }
+
+    @Override
+    public void deleteById(UUID id) {
+        jpaRepository.deleteById(id);
+    }
+
+    @Override
+    public void flush() {
+        jpaRepository.flush();
+    }
+
+    // -------------------------------------------------------------------------
+    // Mapping
+    // -------------------------------------------------------------------------
+
+    private InvoicePdfDocumentEntity toEntity(InvoicePdfDocument document) {
+        return InvoicePdfDocumentEntity.builder()
+            .id(document.getId())
+            .invoiceId(document.getInvoiceId())
+            .invoiceNumber(document.getInvoiceNumber())
+            .documentPath(document.getDocumentPath())
+            .documentUrl(document.getDocumentUrl())
+            .fileSize(document.getFileSize())
+            .mimeType(document.getMimeType())
+            .xmlEmbedded(document.isXmlEmbedded())
+            .status(document.getStatus())
+            .errorMessage(document.getErrorMessage())
+            .retryCount(document.getRetryCount())
+            .createdAt(document.getCreatedAt())
+            .completedAt(document.getCompletedAt())
+            .build();
+    }
+
+    private InvoicePdfDocument toDomain(InvoicePdfDocumentEntity entity) {
+        return InvoicePdfDocument.builder()
+            .id(entity.getId())
+            .invoiceId(entity.getInvoiceId())
+            .invoiceNumber(entity.getInvoiceNumber())
+            .documentPath(entity.getDocumentPath())
+            .documentUrl(entity.getDocumentUrl())
+            .fileSize(entity.getFileSize() != null ? entity.getFileSize() : 0L)
+            .mimeType(entity.getMimeType())
+            .xmlEmbedded(entity.getXmlEmbedded() != null && entity.getXmlEmbedded())
+            .status(entity.getStatus())
+            .errorMessage(entity.getErrorMessage())
+            .retryCount(entity.getRetryCount() != null ? entity.getRetryCount() : 0)
+            .createdAt(entity.getCreatedAt())
+            .completedAt(entity.getCompletedAt())
+            .build();
+    }
+}
