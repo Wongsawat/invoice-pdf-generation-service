@@ -142,9 +142,8 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
             appendElement(xml, "notes", getTextValue(root, "notes", ""));
 
         } catch (Exception e) {
-            log.warn("Failed to parse invoice JSON, using minimal XML: {}", e.getMessage());
-            // Provide minimal XML if JSON parsing fails
-            appendElement(xml, "invoiceNumber", invoiceNumber);
+            log.error("Failed to parse invoice JSON for invoice {}: {}", invoiceNumber, e.getMessage());
+            throw e;  // propagate — generatePdf wraps this in InvoicePdfGenerationException
         }
 
         xml.append("</invoice>\n");

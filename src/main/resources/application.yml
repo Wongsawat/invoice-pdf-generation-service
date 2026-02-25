@@ -108,7 +108,7 @@ resilience4j:
 logging:
   level:
     root: INFO
-    com.wpanther.invoice.pdf: DEBUG
+    com.wpanther.invoice.pdf: INFO
     org.apache.camel: INFO
     org.apache.camel.component.kafka: DEBUG
     org.apache.fop: INFO

@@ -13,10 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +33,6 @@ class SagaCommandHandlerTest {
     @Mock private SagaReplyPort sagaReplyPort;
     @Mock private org.springframework.web.client.RestTemplate restTemplate;
 
-    @InjectMocks
     private SagaCommandHandler sagaCommandHandler;
 
     private static final String SIGNED_XML_URL     = "http://minio:9000/signed/invoice-signed.xml";
@@ -45,7 +42,9 @@ class SagaCommandHandlerTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(sagaCommandHandler, "maxRetries", 3);
+        sagaCommandHandler = new SagaCommandHandler(
+                repository, pdfDocumentService, pdfGenerationService,
+                pdfStoragePort, sagaReplyPort, restTemplate, 3);
     }
 
     private ProcessInvoicePdfCommand processCommand() {

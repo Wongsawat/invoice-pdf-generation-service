@@ -7,7 +7,6 @@ import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,7 +34,6 @@ import java.util.Optional;
  * exhaustion under concurrent load.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SagaCommandHandler {
 
@@ -45,9 +43,23 @@ public class SagaCommandHandler {
     private final PdfStoragePort pdfStoragePort;
     private final SagaReplyPort sagaReplyPort;   // used only by publishOrchestrationFailure
     private final RestTemplate restTemplate;
+    private final int maxRetries;
 
-    @Value("${app.pdf.generation.max-retries:3}")
-    private int maxRetries;
+    public SagaCommandHandler(InvoicePdfDocumentRepository repository,
+                              InvoicePdfDocumentService pdfDocumentService,
+                              InvoicePdfGenerationService pdfGenerationService,
+                              PdfStoragePort pdfStoragePort,
+                              SagaReplyPort sagaReplyPort,
+                              RestTemplate restTemplate,
+                              @Value("${app.pdf.generation.max-retries:3}") int maxRetries) {
+        this.repository = repository;
+        this.pdfDocumentService = pdfDocumentService;
+        this.pdfGenerationService = pdfGenerationService;
+        this.pdfStoragePort = pdfStoragePort;
+        this.sagaReplyPort = sagaReplyPort;
+        this.restTemplate = restTemplate;
+        this.maxRetries = maxRetries;
+    }
 
     /**
      * Handle a ProcessInvoicePdfCommand from the saga orchestrator.
