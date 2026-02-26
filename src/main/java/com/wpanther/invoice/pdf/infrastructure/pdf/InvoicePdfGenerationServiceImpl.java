@@ -3,8 +3,8 @@ package com.wpanther.invoice.pdf.infrastructure.pdf;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.xml.stream.XMLOutputFactory;
@@ -22,13 +22,23 @@ import java.io.StringWriter;
  * 4. Embeds the original XML as an attachment
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationService {
 
     private final FopInvoicePdfGenerator fopPdfGenerator;
     private final PdfA3Converter pdfA3Converter;
     private final ObjectMapper objectMapper;
+    private final String defaultVatRate;
+
+    public InvoicePdfGenerationServiceImpl(FopInvoicePdfGenerator fopPdfGenerator,
+                                           PdfA3Converter pdfA3Converter,
+                                           ObjectMapper objectMapper,
+                                           @Value("${app.invoice.default-vat-rate:7}") String defaultVatRate) {
+        this.fopPdfGenerator  = fopPdfGenerator;
+        this.pdfA3Converter   = pdfA3Converter;
+        this.objectMapper     = objectMapper;
+        this.defaultVatRate   = defaultVatRate;
+    }
 
     @Override
     public byte[] generatePdf(String invoiceNumber, String xmlContent, String invoiceDataJson)
@@ -134,7 +144,7 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
             writeElement(writer, "subtotal",        getTextValue(root, "subtotal", "0"));
             writeElement(writer, "discount",        getTextValue(root, "discount", "0"));
             writeElement(writer, "amountBeforeVat", getTextValue(root, "amountBeforeVat", "0"));
-            writeElement(writer, "vatRate",         getTextValue(root, "vatRate", "7"));
+            writeElement(writer, "vatRate",         getTextValue(root, "vatRate", defaultVatRate));
             writeElement(writer, "vatAmount",       getTextValue(root, "vatAmount", "0"));
             writeElement(writer, "grandTotal",      getTextValue(root, "grandTotal", "0"));
             writeElement(writer, "amountInWords",   getTextValue(root, "amountInWords", ""));

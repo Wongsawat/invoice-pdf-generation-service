@@ -2,7 +2,12 @@ package com.wpanther.invoice.pdf.infrastructure.persistence;
 
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -17,7 +22,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PACKAGE)   // package-private: used by @Builder only
 @Builder
 public class InvoicePdfDocumentEntity {
 

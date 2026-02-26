@@ -54,7 +54,7 @@ class InvoicePdfGenerationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new InvoicePdfGenerationServiceImpl(fopGenerator, pdfA3Converter, new ObjectMapper());
+        service = new InvoicePdfGenerationServiceImpl(fopGenerator, pdfA3Converter, new ObjectMapper(), "7");
     }
 
     // -------------------------------------------------------------------------

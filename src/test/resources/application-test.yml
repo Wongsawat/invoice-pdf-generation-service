@@ -35,7 +35,8 @@ app:
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
-      group-id: invoice-pdf-generation-service-test
+      command-group-id: invoice-pdf-generation-command-test
+      compensation-group-id: invoice-pdf-generation-compensation-test
       consumers-count: 1
       max-poll-records: 10
       break-on-first-error: true
@@ -58,6 +59,8 @@ app:
     generation:
       max-retries: 3
       max-concurrent-renders: 2
+  invoice:
+    default-vat-rate: 7
   rest-client:
     connect-timeout: 5000
     read-timeout: 30000

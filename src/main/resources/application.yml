@@ -43,7 +43,8 @@ app:
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:
-      group-id: invoice-pdf-generation-service
+      command-group-id: ${KAFKA_COMMAND_GROUP_ID:invoice-pdf-generation-command}
+      compensation-group-id: ${KAFKA_COMPENSATION_GROUP_ID:invoice-pdf-generation-compensation}
       consumers-count: ${KAFKA_CONSUMERS_COUNT:3}
       max-poll-records: ${KAFKA_MAX_POLL_RECORDS:100}
       break-on-first-error: ${KAFKA_BREAK_ON_FIRST_ERROR:true}
@@ -66,6 +67,8 @@ app:
     generation:
       max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
       max-concurrent-renders: ${PDF_MAX_CONCURRENT_RENDERS:3}
+  invoice:
+    default-vat-rate: ${INVOICE_DEFAULT_VAT_RATE:7}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}
