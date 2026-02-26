@@ -1,5 +1,7 @@
 package com.wpanther.invoice.pdf.infrastructure.pdf;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSName;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -28,12 +31,16 @@ import java.time.ZoneId;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Converts PDF documents to PDF/A-3 format and embeds XML attachments.
  *
  * PDF/A-3 is an ISO standard for long-term archiving of electronic documents
  * that allows embedding of arbitrary file formats (including XML).
+ *
+ * The ICC color profile is loaded once at construction and reused for every
+ * conversion call, avoiding repeated classpath lookups.
  */
 @Component
 @Slf4j
@@ -42,6 +49,14 @@ public class PdfA3Converter {
     private static final String ICC_PROFILE_PATH = "icc/sRGB.icc";
     private static final String MIME_TYPE_XML = "application/xml";
     private static final String AFRelationship_SOURCE = "Source";
+
+    private final byte[] iccProfileBytes;   // loaded once at startup
+    private final Timer conversionTimer;
+
+    public PdfA3Converter(MeterRegistry meterRegistry) {
+        this.iccProfileBytes  = loadIccProfile();
+        this.conversionTimer  = meterRegistry.timer("pdf.conversion.pdfa3");
+    }
 
     /**
      * Convert PDF to PDF/A-3b format with embedded XML.
@@ -58,6 +73,7 @@ public class PdfA3Converter {
 
         log.debug("Converting PDF to PDF/A-3 with embedded XML: {}", xmlFilename);
 
+        long t0 = System.nanoTime();
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
 
             // Add PDF/A-3 identification metadata
@@ -80,6 +96,8 @@ public class PdfA3Converter {
         } catch (Exception e) {
             log.error("Failed to convert PDF to PDF/A-3", e);
             throw new PdfConversionException("PDF/A-3 conversion failed: " + e.getMessage(), e);
+        } finally {
+            conversionTimer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
         }
     }
 
@@ -122,6 +140,7 @@ public class PdfA3Converter {
 
     /**
      * Add sRGB ICC color profile (required for PDF/A compliance).
+     * Uses the profile bytes cached at construction time.
      */
     private void addColorProfile(PDDocument document) throws Exception {
         PDDocumentCatalog catalog = document.getDocumentCatalog();
@@ -132,32 +151,18 @@ public class PdfA3Converter {
             return;
         }
 
-        // Load ICC profile
-        InputStream iccStream = null;
-        try {
-            ClassPathResource iccResource = new ClassPathResource(ICC_PROFILE_PATH);
-            if (iccResource.exists()) {
-                iccStream = iccResource.getInputStream();
-            } else {
-                // Use built-in sRGB profile as fallback
-                log.warn("ICC profile not found at {}, using system default", ICC_PROFILE_PATH);
-                iccStream = PdfA3Converter.class.getResourceAsStream("/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
-            }
-
-            if (iccStream != null) {
-                PDOutputIntent outputIntent = new PDOutputIntent(document, iccStream);
-                outputIntent.setInfo("sRGB IEC61966-2.1");
-                outputIntent.setOutputCondition("sRGB");
-                outputIntent.setOutputConditionIdentifier("sRGB IEC61966-2.1");
-                outputIntent.setRegistryName("http://www.color.org");
-                catalog.addOutputIntent(outputIntent);
-                log.debug("Added sRGB ICC color profile");
-            }
-        } finally {
-            if (iccStream != null) {
-                iccStream.close();
-            }
+        if (iccProfileBytes == null) {
+            log.warn("No ICC profile available, skipping color profile setup");
+            return;
         }
+
+        PDOutputIntent outputIntent = new PDOutputIntent(document, new ByteArrayInputStream(iccProfileBytes));
+        outputIntent.setInfo("sRGB IEC61966-2.1");
+        outputIntent.setOutputCondition("sRGB");
+        outputIntent.setOutputConditionIdentifier("sRGB IEC61966-2.1");
+        outputIntent.setRegistryName("http://www.color.org");
+        catalog.addOutputIntent(outputIntent);
+        log.debug("Added sRGB ICC color profile");
     }
 
     /**
@@ -200,6 +205,38 @@ public class PdfA3Converter {
         catalog.getCOSObject().setItem(COSName.getPDFName("AF"), fileSpec);
 
         log.debug("Embedded XML file: {} ({} bytes)", xmlFilename, xmlBytes.length);
+    }
+
+    /**
+     * Load the ICC profile from the classpath once at startup.
+     * Returns null if the profile cannot be found, in which case color
+     * profile setup will be skipped (PDF/A compliance may be degraded).
+     */
+    private static byte[] loadIccProfile() {
+        try {
+            ClassPathResource iccResource = new ClassPathResource(ICC_PROFILE_PATH);
+            if (iccResource.exists()) {
+                try (InputStream is = iccResource.getInputStream()) {
+                    byte[] bytes = is.readAllBytes();
+                    log.info("Loaded ICC profile: {} ({} bytes)", ICC_PROFILE_PATH, bytes.length);
+                    return bytes;
+                }
+            }
+            log.warn("ICC profile not found at {}, trying built-in fallback", ICC_PROFILE_PATH);
+            InputStream fallback = PdfA3Converter.class.getResourceAsStream(
+                    "/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
+            if (fallback != null) {
+                try (InputStream is = fallback) {
+                    byte[] bytes = is.readAllBytes();
+                    log.warn("Using built-in fallback ICC profile ({} bytes)", bytes.length);
+                    return bytes;
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to load ICC profile, PDF/A color profile will be skipped: {}", e.getMessage());
+        }
+        log.warn("No ICC profile available; PDF/A color profile will be skipped");
+        return null;
     }
 
     /**

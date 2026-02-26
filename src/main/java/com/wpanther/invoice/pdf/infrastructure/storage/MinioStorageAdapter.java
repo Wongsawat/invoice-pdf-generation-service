@@ -1,11 +1,12 @@
 package com.wpanther.invoice.pdf.infrastructure.storage;
 
 import com.wpanther.invoice.pdf.application.port.out.PdfStoragePort;
-import lombok.RequiredArgsConstructor;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -19,17 +20,25 @@ import java.util.UUID;
  * All AWS SDK types are confined to this adapter.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class MinioStorageAdapter implements PdfStoragePort {
 
     private final S3Client s3Client;
+    private final String bucketName;
+    private final String baseUrl;
+    private final Timer storeTimer;
+    private final Timer deleteTimer;
 
-    @Value("${app.minio.bucket-name}")
-    private String bucketName;
-
-    @Value("${app.minio.base-url}")
-    private String baseUrl;
+    public MinioStorageAdapter(S3Client s3Client,
+                               @Value("${app.minio.bucket-name}") String bucketName,
+                               @Value("${app.minio.base-url}") String baseUrl,
+                               MeterRegistry meterRegistry) {
+        this.s3Client    = s3Client;
+        this.bucketName  = bucketName;
+        this.baseUrl     = baseUrl;
+        this.storeTimer  = meterRegistry.timer("pdf.minio.store",  "bucket", bucketName);
+        this.deleteTimer = meterRegistry.timer("pdf.minio.delete", "bucket", bucketName);
+    }
 
     @Override
     @CircuitBreaker(name = "minio")
@@ -37,28 +46,31 @@ public class MinioStorageAdapter implements PdfStoragePort {
         if (pdfBytes == null || pdfBytes.length == 0) {
             throw new IllegalArgumentException("pdfBytes cannot be null or empty");
         }
-        String key = buildKey(invoiceNumber);
-
-        PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .contentType("application/pdf")
-                .contentLength((long) pdfBytes.length)
-                .build();
-
-        s3Client.putObject(request, RequestBody.fromBytes(pdfBytes));
-        log.info("Uploaded PDF to MinIO: bucket={}, key={}, size={} bytes", bucketName, key, pdfBytes.length);
-        return key;
+        return storeTimer.record(() -> {
+            String key = buildKey(invoiceNumber);
+            PutObjectRequest request = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .contentType("application/pdf")
+                    .contentLength((long) pdfBytes.length)
+                    .build();
+            s3Client.putObject(request, RequestBody.fromBytes(pdfBytes));
+            log.info("Uploaded PDF to MinIO: bucket={}, key={}, size={} bytes", bucketName, key, pdfBytes.length);
+            return key;
+        });
     }
 
     @Override
+    @CircuitBreaker(name = "minio")
     public void delete(String key) {
-        DeleteObjectRequest request = DeleteObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build();
-        s3Client.deleteObject(request);
-        log.info("Deleted PDF from MinIO: bucket={}, key={}", bucketName, key);
+        deleteTimer.record(() -> {
+            DeleteObjectRequest request = DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build();
+            s3Client.deleteObject(request);
+            log.info("Deleted PDF from MinIO: bucket={}, key={}", bucketName, key);
+        });
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.wpanther.invoice.pdf.infrastructure.pdf;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ class PdfA3ConverterTest {
 
     @BeforeEach
     void setUp() {
-        converter = new PdfA3Converter();
+        converter = new PdfA3Converter(new SimpleMeterRegistry());
     }
 
     @Test

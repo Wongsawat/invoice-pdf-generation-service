@@ -1,5 +1,10 @@
 package com.wpanther.invoice.pdf.infrastructure.pdf;
 
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.tracing.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fop.apps.Fop;
 import org.apache.fop.apps.FopFactory;
@@ -20,6 +25,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Generates PDF documents using Apache FOP with XSL-FO templates.
@@ -41,9 +47,12 @@ public class FopInvoicePdfGenerator {
     private final FopFactory fopFactory;
     private final Templates compiledTemplate;   // thread-safe compiled XSL
     private final Semaphore renderSemaphore;    // caps concurrent FOP renders
+    private final Timer renderTimer;
+    private final DistributionSummary pdfSizeSummary;
 
     public FopInvoicePdfGenerator(
-            @Value("${app.pdf.generation.max-concurrent-renders:3}") int maxConcurrentRenders) {
+            @Value("${app.pdf.generation.max-concurrent-renders:3}") int maxConcurrentRenders,
+            MeterRegistry meterRegistry) {
         try {
             this.fopFactory = createFopFactory();
 
@@ -55,6 +64,15 @@ public class FopInvoicePdfGenerator {
             }
             this.compiledTemplate = tf.newTemplates(new StreamSource(xslResource.getInputStream()));
             this.renderSemaphore  = new Semaphore(maxConcurrentRenders, true); // fair
+
+            this.renderTimer = meterRegistry.timer("pdf.fop.render");
+            this.pdfSizeSummary = DistributionSummary.builder("pdf.fop.size.bytes")
+                    .description("Size of generated invoice PDFs in bytes")
+                    .register(meterRegistry);
+            Gauge.builder("pdf.fop.render.available_permits", renderSemaphore, Semaphore::availablePermits)
+                    .description("Available FOP concurrent render permits")
+                    .register(meterRegistry);
+
             log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={}", maxConcurrentRenders);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize FOP PDF generator", e);
@@ -86,6 +104,7 @@ public class FopInvoicePdfGenerator {
      * @return PDF bytes
      * @throws PdfGenerationException if generation fails
      */
+    @NewSpan("pdf.fop.render")
     public byte[] generatePdf(String xmlData) throws PdfGenerationException {
         log.debug("Awaiting render permit (available={})", renderSemaphore.availablePermits());
         try {
@@ -94,6 +113,7 @@ public class FopInvoicePdfGenerator {
             Thread.currentThread().interrupt();
             throw new PdfGenerationException("PDF generation interrupted while waiting for render slot", e);
         }
+        long t0 = System.nanoTime();
         try (ByteArrayOutputStream pdfOutput = new ByteArrayOutputStream()) {
             Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, pdfOutput);
             Transformer transformer = compiledTemplate.newTransformer(); // per-call, thread-safe
@@ -102,11 +122,13 @@ public class FopInvoicePdfGenerator {
             transformer.transform(xmlSource, new SAXResult(fop.getDefaultHandler()));
             byte[] pdfBytes = pdfOutput.toByteArray();
             log.info("Generated PDF: {} bytes", pdfBytes.length);
+            pdfSizeSummary.record(pdfBytes.length);
             return pdfBytes;
         } catch (Exception e) {
             log.error("Failed to generate PDF", e);
             throw new PdfGenerationException("PDF generation failed: " + e.getMessage(), e);
         } finally {
+            renderTimer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
             renderSemaphore.release();
         }
     }

@@ -1,14 +1,13 @@
 package com.wpanther.invoice.pdf.infrastructure.storage;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -28,13 +27,13 @@ class MinioStorageAdapterTest {
     @Mock
     private S3Client s3Client;
 
-    @InjectMocks
     private MinioStorageAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(adapter, "bucketName", "test-invoices");
-        ReflectionTestUtils.setField(adapter, "baseUrl", "http://localhost:9001/test-invoices");
+        adapter = new MinioStorageAdapter(
+                s3Client, "test-invoices", "http://localhost:9001/test-invoices",
+                new SimpleMeterRegistry());
     }
 
     @Test

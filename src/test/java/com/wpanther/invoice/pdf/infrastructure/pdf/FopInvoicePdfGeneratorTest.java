@@ -1,5 +1,6 @@
 package com.wpanther.invoice.pdf.infrastructure.pdf;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,14 +18,14 @@ class FopInvoicePdfGeneratorTest {
     @DisplayName("Constructor succeeds and compiles XSL template")
     void constructor_compilesTemplateSuccessfully() {
         // No exception = template found and compiled
-        assertThatCode(() -> new FopInvoicePdfGenerator(2))
+        assertThatCode(() -> new FopInvoicePdfGenerator(2, new SimpleMeterRegistry()))
                 .doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("Semaphore is initialised with the configured permit count")
     void constructor_semaphorePermitsMatchConfiguration() throws Exception {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(5);
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(5, new SimpleMeterRegistry());
         Field f = FopInvoicePdfGenerator.class.getDeclaredField("renderSemaphore");
         f.setAccessible(true);
         Semaphore s = (Semaphore) f.get(gen);
@@ -35,7 +36,7 @@ class FopInvoicePdfGeneratorTest {
     @Test
     @DisplayName("Malformed XML → PdfGenerationException")
     void generatePdf_malformedXml_throwsPdfGenerationException() {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1);
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, new SimpleMeterRegistry());
         assertThatThrownBy(() -> gen.generatePdf("this is not xml <<<"))
                 .isInstanceOf(FopInvoicePdfGenerator.PdfGenerationException.class);
     }
