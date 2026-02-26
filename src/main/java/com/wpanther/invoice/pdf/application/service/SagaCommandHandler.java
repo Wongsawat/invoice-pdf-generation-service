@@ -9,11 +9,11 @@ import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
@@ -42,7 +42,7 @@ public class SagaCommandHandler {
     private final InvoicePdfGenerationService pdfGenerationService;
     private final PdfStoragePort pdfStoragePort;
     private final SagaReplyPort sagaReplyPort;   // used only by publishOrchestrationFailure
-    private final RestTemplate restTemplate;
+    private final SignedXmlFetchPort signedXmlFetchPort;
     private final int maxRetries;
 
     public SagaCommandHandler(InvoicePdfDocumentRepository repository,
@@ -50,14 +50,14 @@ public class SagaCommandHandler {
                               InvoicePdfGenerationService pdfGenerationService,
                               PdfStoragePort pdfStoragePort,
                               SagaReplyPort sagaReplyPort,
-                              RestTemplate restTemplate,
+                              SignedXmlFetchPort signedXmlFetchPort,
                               @Value("${app.pdf.generation.max-retries:3}") int maxRetries) {
         this.repository = repository;
         this.pdfDocumentService = pdfDocumentService;
         this.pdfGenerationService = pdfGenerationService;
         this.pdfStoragePort = pdfStoragePort;
         this.sagaReplyPort = sagaReplyPort;
-        this.restTemplate = restTemplate;
+        this.signedXmlFetchPort = signedXmlFetchPort;
         this.maxRetries = maxRetries;
     }
 
@@ -113,11 +113,7 @@ public class SagaCommandHandler {
                     // ── NO TRANSACTION HELD HERE ────────────────────────────────────
 
                     // Download signed XML (network I/O)
-                    String signedXml = restTemplate.getForObject(signedXmlUrl, String.class);
-                    if (signedXml == null || signedXml.isBlank()) {
-                        throw new IllegalStateException(
-                                "Failed to download signed XML from " + signedXmlUrl);
-                    }
+                    String signedXml = signedXmlFetchPort.fetch(signedXmlUrl);
 
                     // Generate PDF bytes (CPU: FOP + PDFBox)
                     byte[] pdfBytes = pdfGenerationService.generatePdf(

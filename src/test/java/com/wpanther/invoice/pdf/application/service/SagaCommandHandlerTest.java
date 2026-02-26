@@ -2,6 +2,7 @@ package com.wpanther.invoice.pdf.application.service;
 
 import com.wpanther.invoice.pdf.application.port.out.PdfStoragePort;
 import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
+import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
@@ -31,7 +32,7 @@ class SagaCommandHandlerTest {
     @Mock private InvoicePdfGenerationService pdfGenerationService;
     @Mock private PdfStoragePort pdfStoragePort;
     @Mock private SagaReplyPort sagaReplyPort;
-    @Mock private org.springframework.web.client.RestTemplate restTemplate;
+    @Mock private SignedXmlFetchPort signedXmlFetchPort;
 
     private SagaCommandHandler sagaCommandHandler;
 
@@ -44,7 +45,7 @@ class SagaCommandHandlerTest {
     void setUp() {
         sagaCommandHandler = new SagaCommandHandler(
                 repository, pdfDocumentService, pdfGenerationService,
-                pdfStoragePort, sagaReplyPort, restTemplate, 3);
+                pdfStoragePort, sagaReplyPort, signedXmlFetchPort, 3);
     }
 
     private ProcessInvoicePdfCommand processCommand() {
@@ -81,13 +82,13 @@ class SagaCommandHandlerTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("Happy path: beginGeneration → generate → upload → completeGenerationAndPublish")
+    @DisplayName("Happy path: beginGeneration → fetch → generate → upload → completeGenerationAndPublish")
     void handleProcessCommand_success() throws Exception {
         byte[] pdfBytes = new byte[5000];
         InvoicePdfDocument doc = generatingDoc();
 
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
@@ -115,7 +116,7 @@ class SagaCommandHandlerTest {
 
         verify(pdfDocumentService).publishIdempotentSuccess(any(), any());
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
-        verifyNoInteractions(pdfGenerationService, pdfStoragePort);
+        verifyNoInteractions(pdfGenerationService, pdfStoragePort, signedXmlFetchPort);
     }
 
     // -------------------------------------------------------------------------
@@ -134,6 +135,7 @@ class SagaCommandHandlerTest {
 
         verify(pdfDocumentService).publishRetryExhausted(any());
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
+        verifyNoInteractions(signedXmlFetchPort);
     }
 
     @Test
@@ -147,7 +149,7 @@ class SagaCommandHandlerTest {
         InvoicePdfDocument newDoc = generatingDoc();
 
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
@@ -172,7 +174,7 @@ class SagaCommandHandlerTest {
         InvoicePdfDocument newDoc = generatingDoc();
 
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
@@ -190,15 +192,18 @@ class SagaCommandHandlerTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("Null signed XML → publishGenerationFailure, no beginGeneration")
-    void handleProcessCommand_nullSignedXml() {
+    @DisplayName("Fetch returns blank content → failGenerationAndPublish after beginGeneration")
+    void handleProcessCommand_blankFetchedXml() {
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(null);
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(generatingDoc());
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL))
+                .thenThrow(new SignedXmlFetchPort.SignedXmlFetchException(
+                        "Failed to download signed XML from " + SIGNED_XML_URL));
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
-        verify(pdfDocumentService).failGenerationAndPublish(any(), contains("Failed to download signed XML"), anyInt(), any());
+        verify(pdfDocumentService).failGenerationAndPublish(
+                any(), contains("Failed to download signed XML"), anyInt(), any());
     }
 
     @Test
@@ -213,21 +218,24 @@ class SagaCommandHandlerTest {
 
         verify(pdfDocumentService).publishGenerationFailure(any(), contains("signedXmlUrl"));
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
+        verifyNoInteractions(signedXmlFetchPort);
     }
 
     @Test
-    @DisplayName("RestTemplate throws → failGenerationAndPublish called")
-    void handleProcessCommand_restTemplateFails() {
+    @DisplayName("HTTP fetch throws → failGenerationAndPublish called")
+    void handleProcessCommand_fetchFails() {
         InvoicePdfDocument doc = generatingDoc();
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class))
-                .thenThrow(new RuntimeException("Connection refused"));
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL))
+                .thenThrow(new SignedXmlFetchPort.SignedXmlFetchException(
+                        "Failed to download signed XML from " + SIGNED_XML_URL,
+                        new RuntimeException("Connection refused")));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
         verify(pdfDocumentService).failGenerationAndPublish(
-                eq(doc.getId()), contains("RuntimeException"), eq(-1), any());
+                eq(doc.getId()), contains("Failed to download signed XML"), eq(-1), any());
     }
 
     @Test
@@ -235,7 +243,7 @@ class SagaCommandHandlerTest {
     void handleProcessCommand_pdfGenerationFails() throws Exception {
         InvoicePdfDocument doc = generatingDoc();
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
                 .thenThrow(new InvoicePdfGenerationService.InvoicePdfGenerationException("FOP failed"));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
@@ -252,7 +260,7 @@ class SagaCommandHandlerTest {
     void handleProcessCommand_minioUploadFails() throws Exception {
         InvoicePdfDocument doc = generatingDoc();
         when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
-        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(new byte[1000]);
         when(pdfStoragePort.store(anyString(), any())).thenThrow(new RuntimeException("MinIO unavailable"));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
