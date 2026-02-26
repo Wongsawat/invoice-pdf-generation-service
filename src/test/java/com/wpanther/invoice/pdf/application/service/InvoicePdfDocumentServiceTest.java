@@ -61,6 +61,32 @@ class InvoicePdfDocumentServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // findByInvoiceId
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("findByInvoiceId() delegates to repository and returns the result")
+    void findByInvoiceId_delegatesToRepository() {
+        InvoicePdfDocument doc = generatingDoc();
+        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
+
+        Optional<InvoicePdfDocument> result = service.findByInvoiceId("inv-001");
+
+        assertThat(result).isPresent().contains(doc);
+        verify(repository).findByInvoiceId("inv-001");
+    }
+
+    @Test
+    @DisplayName("findByInvoiceId() returns empty when no document exists")
+    void findByInvoiceId_returnsEmpty_whenNotFound() {
+        when(repository.findByInvoiceId("unknown")).thenReturn(Optional.empty());
+
+        Optional<InvoicePdfDocument> result = service.findByInvoiceId("unknown");
+
+        assertThat(result).isEmpty();
+    }
+
+    // -------------------------------------------------------------------------
     // beginGeneration
     // -------------------------------------------------------------------------
 

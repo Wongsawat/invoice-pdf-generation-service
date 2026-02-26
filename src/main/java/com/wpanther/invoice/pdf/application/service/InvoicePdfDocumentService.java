@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -33,6 +34,16 @@ public class InvoicePdfDocumentService {
     private final InvoicePdfDocumentRepository repository;
     private final PdfEventPort pdfEventPort;
     private final SagaReplyPort sagaReplyPort;
+
+    // -------------------------------------------------------------------------
+    // Queries
+    // -------------------------------------------------------------------------
+
+    /** Look up an existing document by invoice ID (read-only, no state change). */
+    @Transactional(readOnly = true)
+    public Optional<InvoicePdfDocument> findByInvoiceId(String invoiceId) {
+        return repository.findByInvoiceId(invoiceId);
+    }
 
     // -------------------------------------------------------------------------
     // Document lifecycle

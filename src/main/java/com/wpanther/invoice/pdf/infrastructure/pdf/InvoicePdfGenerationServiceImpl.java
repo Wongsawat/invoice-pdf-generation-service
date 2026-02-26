@@ -64,14 +64,17 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
         }
     }
 
+    // Thread-safe: XMLOutputFactory is stateless after construction; createXMLStreamWriter() is safe
+    // to call concurrently. Cached here to avoid a ServiceLoader SPI scan on every PDF generation.
+    private static final XMLOutputFactory XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance();
+
     /**
      * Convert invoice JSON data to XML format for XSL-FO processing.
      * Uses XMLStreamWriter for correct automatic escaping of XML special characters.
      */
     private String convertJsonToXml(String invoiceDataJson, String invoiceNumber) throws Exception {
-        XMLOutputFactory factory = XMLOutputFactory.newInstance();
         StringWriter sw = new StringWriter();
-        XMLStreamWriter writer = factory.createXMLStreamWriter(sw);
+        XMLStreamWriter writer = XML_OUTPUT_FACTORY.createXMLStreamWriter(sw);
 
         try {
             JsonNode root = objectMapper.readTree(invoiceDataJson);

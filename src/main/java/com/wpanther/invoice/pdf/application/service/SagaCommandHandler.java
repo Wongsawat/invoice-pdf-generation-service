@@ -5,7 +5,6 @@ import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
-import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -37,7 +36,6 @@ import java.util.Optional;
 @Slf4j
 public class SagaCommandHandler {
 
-    private final InvoicePdfDocumentRepository repository;
     private final InvoicePdfDocumentService pdfDocumentService;
     private final InvoicePdfGenerationService pdfGenerationService;
     private final PdfStoragePort pdfStoragePort;
@@ -45,14 +43,12 @@ public class SagaCommandHandler {
     private final SignedXmlFetchPort signedXmlFetchPort;
     private final int maxRetries;
 
-    public SagaCommandHandler(InvoicePdfDocumentRepository repository,
-                              InvoicePdfDocumentService pdfDocumentService,
+    public SagaCommandHandler(InvoicePdfDocumentService pdfDocumentService,
                               InvoicePdfGenerationService pdfGenerationService,
                               PdfStoragePort pdfStoragePort,
                               SagaReplyPort sagaReplyPort,
                               SignedXmlFetchPort signedXmlFetchPort,
                               @Value("${app.pdf.generation.max-retries:3}") int maxRetries) {
-        this.repository = repository;
         this.pdfDocumentService = pdfDocumentService;
         this.pdfGenerationService = pdfGenerationService;
         this.pdfStoragePort = pdfStoragePort;
@@ -75,7 +71,7 @@ public class SagaCommandHandler {
                     command.getSagaId(), command.getInvoiceNumber());
             try {
                 Optional<InvoicePdfDocument> existing =
-                        repository.findByInvoiceId(command.getInvoiceId());
+                        pdfDocumentService.findByInvoiceId(command.getInvoiceId());
 
                 // Idempotency: already completed — re-publish and reply SUCCESS
                 if (existing.isPresent() && existing.get().isCompleted()) {
@@ -167,7 +163,7 @@ public class SagaCommandHandler {
                     command.getSagaId(), command.getInvoiceId());
             try {
                 Optional<InvoicePdfDocument> existing =
-                        repository.findByInvoiceId(command.getInvoiceId());
+                        pdfDocumentService.findByInvoiceId(command.getInvoiceId());
 
                 if (existing.isPresent()) {
                     InvoicePdfDocument document = existing.get();

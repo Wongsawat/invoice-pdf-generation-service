@@ -39,6 +39,9 @@ public class InvoicePdfDocument {
     private final LocalDateTime createdAt;
     private LocalDateTime completedAt;
 
+    // Optimistic locking (persistence concern — round-trips through the repository adapter)
+    private Long version;
+
     private InvoicePdfDocument(Builder builder) {
         this.id = builder.id != null ? builder.id : UUID.randomUUID();
         this.invoiceId = Objects.requireNonNull(builder.invoiceId, "Invoice ID is required");
@@ -53,6 +56,7 @@ public class InvoicePdfDocument {
         this.retryCount = builder.retryCount;
         this.createdAt = builder.createdAt != null ? builder.createdAt : LocalDateTime.now();
         this.completedAt = builder.completedAt;
+        this.version = builder.version;
 
         validateInvariant();
     }
@@ -179,6 +183,10 @@ public class InvoicePdfDocument {
         return retryCount;
     }
 
+    public Long getVersion() {
+        return version;
+    }
+
     public boolean isMaxRetriesExceeded(int maxRetries) {
         return this.retryCount >= maxRetries;
     }
@@ -216,6 +224,7 @@ public class InvoicePdfDocument {
         private int retryCount;
         private LocalDateTime createdAt;
         private LocalDateTime completedAt;
+        private Long version;
 
         public Builder id(UUID id) {
             this.id = id;
@@ -279,6 +288,11 @@ public class InvoicePdfDocument {
 
         public Builder completedAt(LocalDateTime completedAt) {
             this.completedAt = completedAt;
+            return this;
+        }
+
+        public Builder version(Long version) {
+            this.version = version;
             return this;
         }
 

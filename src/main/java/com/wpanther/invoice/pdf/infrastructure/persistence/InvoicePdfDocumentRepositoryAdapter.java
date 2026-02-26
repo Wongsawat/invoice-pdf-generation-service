@@ -70,6 +70,7 @@ public class InvoicePdfDocumentRepositoryAdapter implements InvoicePdfDocumentRe
             .retryCount(document.getRetryCount())
             .createdAt(document.getCreatedAt())
             .completedAt(document.getCompletedAt())
+            .version(document.getVersion())
             .build();
     }
 
@@ -88,6 +89,7 @@ public class InvoicePdfDocumentRepositoryAdapter implements InvoicePdfDocumentRe
             .retryCount(entity.getRetryCount() != null ? entity.getRetryCount() : 0)
             .createdAt(entity.getCreatedAt())
             .completedAt(entity.getCompletedAt())
+            .version(entity.getVersion())
             .build();
     }
 }

@@ -7,7 +7,6 @@ import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
-import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import com.wpanther.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +26,6 @@ import static org.mockito.Mockito.*;
 @DisplayName("SagaCommandHandler Unit Tests")
 class SagaCommandHandlerTest {
 
-    @Mock private InvoicePdfDocumentRepository repository;
     @Mock private InvoicePdfDocumentService pdfDocumentService;
     @Mock private InvoicePdfGenerationService pdfGenerationService;
     @Mock private PdfStoragePort pdfStoragePort;
@@ -44,7 +42,7 @@ class SagaCommandHandlerTest {
     @BeforeEach
     void setUp() {
         sagaCommandHandler = new SagaCommandHandler(
-                repository, pdfDocumentService, pdfGenerationService,
+                pdfDocumentService, pdfGenerationService,
                 pdfStoragePort, sagaReplyPort, signedXmlFetchPort, 3);
     }
 
@@ -87,7 +85,7 @@ class SagaCommandHandlerTest {
         byte[] pdfBytes = new byte[5000];
         InvoicePdfDocument doc = generatingDoc();
 
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
@@ -110,7 +108,7 @@ class SagaCommandHandlerTest {
     @Test
     @DisplayName("Idempotency: already COMPLETED → publishIdempotentSuccess, no generation")
     void handleProcessCommand_alreadyCompleted() throws Exception {
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(completedDoc()));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(completedDoc()));
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
@@ -129,7 +127,7 @@ class SagaCommandHandlerTest {
         InvoicePdfDocument failed = InvoicePdfDocument.builder()
                 .id(UUID.randomUUID()).invoiceId("inv-001").invoiceNumber("INV-2024-001")
                 .status(GenerationStatus.FAILED).retryCount(3).build();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
@@ -148,7 +146,7 @@ class SagaCommandHandlerTest {
                 .status(GenerationStatus.FAILED).retryCount(1).build();
         InvoicePdfDocument newDoc = generatingDoc();
 
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
@@ -173,7 +171,7 @@ class SagaCommandHandlerTest {
                 .status(GenerationStatus.FAILED).retryCount(2).build();
         InvoicePdfDocument newDoc = generatingDoc();
 
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
@@ -194,7 +192,7 @@ class SagaCommandHandlerTest {
     @Test
     @DisplayName("Fetch returns blank content → failGenerationAndPublish after beginGeneration")
     void handleProcessCommand_blankFetchedXml() {
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(generatingDoc());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL))
                 .thenThrow(new SignedXmlFetchPort.SignedXmlFetchException(
@@ -212,7 +210,7 @@ class SagaCommandHandlerTest {
         ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
                 "doc-123", "inv-001", "INV-2024-001", "  ", "{}");
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
 
         sagaCommandHandler.handleProcessCommand(cmd);
 
@@ -225,7 +223,7 @@ class SagaCommandHandlerTest {
     @DisplayName("HTTP fetch throws → failGenerationAndPublish called")
     void handleProcessCommand_fetchFails() {
         InvoicePdfDocument doc = generatingDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL))
                 .thenThrow(new SignedXmlFetchPort.SignedXmlFetchException(
                         "Failed to download signed XML from " + SIGNED_XML_URL,
@@ -242,7 +240,7 @@ class SagaCommandHandlerTest {
     @DisplayName("PDF generation throws → failGenerationAndPublish called")
     void handleProcessCommand_pdfGenerationFails() throws Exception {
         InvoicePdfDocument doc = generatingDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
                 .thenThrow(new InvoicePdfGenerationService.InvoicePdfGenerationException("FOP failed"));
@@ -259,7 +257,7 @@ class SagaCommandHandlerTest {
     @DisplayName("MinIO upload throws → failGenerationAndPublish called")
     void handleProcessCommand_minioUploadFails() throws Exception {
         InvoicePdfDocument doc = generatingDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(new byte[1000]);
         when(pdfStoragePort.store(anyString(), any())).thenThrow(new RuntimeException("MinIO unavailable"));
@@ -279,7 +277,7 @@ class SagaCommandHandlerTest {
     @DisplayName("Compensation: deleteById + pdfStoragePort.delete + publishCompensated")
     void handleCompensation_success() {
         InvoicePdfDocument doc = completedDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
 
         sagaCommandHandler.handleCompensation(compensateCommand());
 
@@ -291,7 +289,7 @@ class SagaCommandHandlerTest {
     @Test
     @DisplayName("Compensation with no document → publishCompensated only (idempotent)")
     void handleCompensation_noDocument() {
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
 
         sagaCommandHandler.handleCompensation(compensateCommand());
 
@@ -304,7 +302,7 @@ class SagaCommandHandlerTest {
     @DisplayName("MinIO delete failure during compensation is swallowed; publishCompensated still called")
     void handleCompensation_minioDeleteFails_stillPublishesCompensated() {
         InvoicePdfDocument doc = completedDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
         doThrow(new RuntimeException("MinIO error")).when(pdfStoragePort).delete(anyString());
 
         sagaCommandHandler.handleCompensation(compensateCommand());
@@ -317,7 +315,7 @@ class SagaCommandHandlerTest {
     @DisplayName("deleteById throws during compensation → publishCompensationFailure")
     void handleCompensation_dbDeleteFails() {
         InvoicePdfDocument doc = completedDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
         doThrow(new RuntimeException("DB error")).when(pdfDocumentService).deleteById(any());
 
         sagaCommandHandler.handleCompensation(compensateCommand());
