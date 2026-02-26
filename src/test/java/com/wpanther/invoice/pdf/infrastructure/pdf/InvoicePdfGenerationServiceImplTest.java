@@ -208,4 +208,36 @@ class InvoicePdfGenerationServiceImplTest {
                 .hasMessageContaining("PDF/A-3 conversion failed")
                 .hasMessageContaining("PDFBox failed");
     }
+
+    @Test
+    @DisplayName("JSON with paymentInfo block → paymentInfo elements appear in generated XML")
+    void generatePdf_jsonWithPaymentInfo_xmlContainsPaymentInfo() throws Exception {
+        String jsonWithPaymentInfo = """
+                {
+                  "invoiceNumber": "INV-2024-002",
+                  "seller": { "name": "Seller Co" },
+                  "paymentInfo": {
+                    "method": "Bank Transfer",
+                    "bankName": "Bangkok Bank",
+                    "accountNumber": "123-4-56789-0",
+                    "accountName": "Seller Co Ltd"
+                  }
+                }
+                """;
+        when(fopGenerator.generatePdf(anyString())).thenReturn(BASE_PDF);
+        when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any())).thenReturn(PDFA3_BYTES);
+
+        ArgumentCaptor<String> xmlCaptor = ArgumentCaptor.forClass(String.class);
+        service.generatePdf("INV-2024-002", SIGNED_XML, jsonWithPaymentInfo);
+
+        verify(fopGenerator).generatePdf(xmlCaptor.capture());
+        String xml = xmlCaptor.getValue();
+        assertThat(xml)
+                .contains("<paymentInfo>")
+                .contains("<method>Bank Transfer</method>")
+                .contains("<bankName>Bangkok Bank</bankName>")
+                .contains("<accountNumber>123-4-56789-0</accountNumber>")
+                .contains("<accountName>Seller Co Ltd</accountName>")
+                .contains("</paymentInfo>");
+    }
 }

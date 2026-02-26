@@ -297,6 +297,59 @@
                 <artifactId>flyway-maven-plugin</artifactId>
                 <version>${flyway.version}</version>
             </plugin>
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                            <excludes>
+                                <!-- Spring Boot entry point — nothing meaningful to unit-test -->
+                                <exclude>com/wpanther/invoice/pdf/InvoicePdfGenerationServiceApplication.class</exclude>
+                                <!-- Spring @Configuration wiring — exercised by context load, not meaningful to unit-test -->
+                                <exclude>com/wpanther/invoice/pdf/infrastructure/config/OutboxConfig.class</exclude>
+                                <exclude>com/wpanther/invoice/pdf/infrastructure/config/MinioConfig.class</exclude>
+                                <!-- Camel RouteBuilder — lambda bodies only execute when messages arrive (runtime-only) -->
+                                <exclude>com/wpanther/invoice/pdf/infrastructure/config/SagaRouteConfig.class</exclude>
+                                <!-- Spring Data interface — no bytecode to instrument -->
+                                <exclude>com/wpanther/invoice/pdf/infrastructure/persistence/outbox/SpringDataOutboxRepository.class</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

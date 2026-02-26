@@ -72,6 +72,7 @@ app:
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}
+    allowed-hosts: ${REST_CLIENT_ALLOWED_HOSTS:localhost}
 
 # Eureka client configuration
 eureka:

@@ -21,15 +21,8 @@
             <version>1.4</version>
 
             <!-- Enable PDF/A mode preparation -->
+            <!-- NOTE: PDF/A-3b prohibits encryption — do NOT add encryption-params here -->
             <pdf-a-mode>PDF/A-3b</pdf-a-mode>
-
-            <!-- Disable encryption for PDF/A compliance -->
-            <encryption-params>
-                <noprint/>
-                <nocopy/>
-                <noedit/>
-                <noannotations/>
-            </encryption-params>
 
             <!-- Filter configuration -->
             <filterList>

@@ -7,12 +7,18 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 @DisplayName("PdfA3Converter Unit Tests")
 class PdfA3ConverterTest {
@@ -107,5 +113,52 @@ class PdfA3ConverterTest {
         assertThatThrownBy(() ->
                 converter.convertToPdfA3(garbage, "<invoice/>", "invoice.xml", "INV-999"))
                 .isInstanceOf(PdfA3Converter.PdfConversionException.class);
+    }
+
+    @Test
+    @DisplayName("PDF that already has an output intent skips ICC profile re-add")
+    void convertToPdfA3_pdfWithExistingOutputIntent_skipsAddingColorProfile() throws Exception {
+        byte[] minimalPdf;
+        try (PDDocument doc = new PDDocument();
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            doc.addPage(new PDPage());
+            doc.save(bos);
+            minimalPdf = bos.toByteArray();
+        }
+        // First conversion adds an output intent
+        byte[] pdfWithIntent = converter.convertToPdfA3(minimalPdf, "<invoice/>", "invoice.xml", "INV-A");
+        // Second conversion on the already-converted PDF: output intent already exists → early return path
+        byte[] result = converter.convertToPdfA3(pdfWithIntent, "<invoice/>", "invoice2.xml", "INV-B");
+
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("Null ICC profile bytes → color profile setup is skipped gracefully")
+    void convertToPdfA3_nullIccProfile_skipsColorProfileSetup() throws Exception {
+        byte[] minimalPdf;
+        try (PDDocument doc = new PDDocument();
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            doc.addPage(new PDPage());
+            doc.save(bos);
+            minimalPdf = bos.toByteArray();
+        }
+        // Force iccProfileBytes to null to exercise the null-check guard
+        ReflectionTestUtils.setField(converter, "iccProfileBytes", null);
+
+        assertThatCode(() -> converter.convertToPdfA3(minimalPdf, "<invoice/>", "invoice.xml", "INV-C"))
+                .doesNotThrowAnyException();
+    }
+
+    // -------------------------------------------------------------------------
+    // Exception constructor coverage
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("PdfConversionException(String) 1-arg constructor carries the message")
+    void pdfConversionException_messageOnlyConstructor_hasMessage() {
+        var ex = new PdfA3Converter.PdfConversionException("test failure");
+        assertThat(ex.getMessage()).isEqualTo("test failure");
+        assertThat(ex.getCause()).isNull();
     }
 }

@@ -64,6 +64,7 @@ app:
   rest-client:
     connect-timeout: 5000
     read-timeout: 30000
+    allowed-hosts: localhost
 
 # Disable Eureka for tests
 eureka:

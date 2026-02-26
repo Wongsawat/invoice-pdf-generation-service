@@ -196,4 +196,69 @@ class SagaRouteConfigTest {
         SagaStep step = objectMapper.readValue("\"generate-invoice-pdf\"", SagaStep.class);
         assertThat(step).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
     }
+
+    // -------------------------------------------------------------------------
+    // Full @JsonCreator constructor coverage
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Should deserialize CompensateInvoicePdfCommand from full JSON (exercises @JsonCreator constructor)")
+    void testCompensateCommandDeserializationFromJson() throws Exception {
+        String json = """
+            {
+                "eventId": "550e8400-e29b-41d4-a716-446655440001",
+                "occurredAt": "2024-01-15T10:30:00Z",
+                "eventType": "saga.compensation.invoice-pdf",
+                "version": 1,
+                "sagaId": "saga-002",
+                "sagaStep": "generate-invoice-pdf",
+                "correlationId": "corr-789",
+                "documentId": "doc-456",
+                "invoiceId": "inv-002"
+            }
+            """;
+
+        CompensateInvoicePdfCommand cmd = objectMapper.readValue(json, CompensateInvoicePdfCommand.class);
+
+        assertThat(cmd.getSagaId()).isEqualTo("saga-002");
+        assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
+        assertThat(cmd.getCorrelationId()).isEqualTo("corr-789");
+        assertThat(cmd.getDocumentId()).isEqualTo("doc-456");
+        assertThat(cmd.getInvoiceId()).isEqualTo("inv-002");
+    }
+
+    @Test
+    @DisplayName("Should deserialize InvoicePdfGeneratedEvent from full JSON (exercises @JsonCreator constructor)")
+    void testInvoicePdfGeneratedEventDeserializationFromJson() throws Exception {
+        String json = """
+            {
+                "eventId": "550e8400-e29b-41d4-a716-446655440002",
+                "occurredAt": "2024-01-15T11:00:00Z",
+                "eventType": "pdf.generated.invoice",
+                "version": 1,
+                "sagaId": null,
+                "source": "invoice-pdf-generation-service",
+                "traceType": "PDF_GENERATED",
+                "context": null,
+                "documentId": "doc-123",
+                "invoiceId": "inv-001",
+                "invoiceNumber": "INV-2024-001",
+                "documentUrl": "http://localhost:9001/invoices/test.pdf",
+                "fileSize": 123456,
+                "xmlEmbedded": true,
+                "correlationId": "corr-456"
+            }
+            """;
+
+        InvoicePdfGeneratedEvent event = objectMapper.readValue(json, InvoicePdfGeneratedEvent.class);
+
+        assertThat(event.getDocumentId()).isEqualTo("doc-123");
+        assertThat(event.getInvoiceId()).isEqualTo("inv-001");
+        assertThat(event.getInvoiceNumber()).isEqualTo("INV-2024-001");
+        assertThat(event.getDocumentUrl()).isEqualTo("http://localhost:9001/invoices/test.pdf");
+        assertThat(event.getFileSize()).isEqualTo(123456L);
+        assertThat(event.isXmlEmbedded()).isTrue();
+        assertThat(event.getCorrelationId()).isEqualTo("corr-456");
+        assertThat(event.getEventType()).isEqualTo("pdf.generated.invoice");
+    }
 }
