@@ -131,6 +131,8 @@ class SagaRouteConfigTest {
 
         assertThat(json).contains("\"eventType\":\"pdf.generated.invoice\"");
         assertThat(json).contains("\"eventId\"");
+        assertThat(json).contains("\"correlationId\":\"corr-456\"");
+        assertThat(json).doesNotContain("\"sagaId\":\"corr-456\"");
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getOccurredAt()).isNotNull();
         assertThat(event.getVersion()).isEqualTo(1);

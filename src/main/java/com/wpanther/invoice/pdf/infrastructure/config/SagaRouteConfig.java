@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,33 +20,15 @@ import org.springframework.stereotype.Component;
  * </ul>
  *
  * <p>Events are published via outbox pattern (not direct Kafka produce).</p>
+ *
+ * <p>All Kafka URI parameters are resolved via Camel property placeholders
+ * ({@code {{key}}}) so they can be tuned per deployment without recompilation.</p>
  */
 @Component
 @Slf4j
 public class SagaRouteConfig extends RouteBuilder {
 
     private final SagaCommandHandler sagaCommandHandler;
-
-    @Value("${app.kafka.bootstrap-servers}")
-    private String kafkaBrokers;
-
-    @Value("${app.kafka.topics.saga-command-invoice-pdf}")
-    private String sagaCommandTopic;
-
-    @Value("${app.kafka.topics.saga-compensation-invoice-pdf}")
-    private String sagaCompensationTopic;
-
-    @Value("${app.kafka.topics.dlq:pdf.generation.invoice.dlq}")
-    private String dlqTopic;
-
-    @Value("${app.kafka.consumer.group-id}")
-    private String consumerGroupId;
-
-    @Value("${app.kafka.consumer.consumers-count:3}")
-    private int consumersCount;
-
-    @Value("${app.kafka.consumer.max-poll-records:100}")
-    private int maxPollRecords;
 
     public SagaRouteConfig(SagaCommandHandler sagaCommandHandler) {
         this.sagaCommandHandler = sagaCommandHandler;
@@ -60,7 +41,8 @@ public class SagaRouteConfig extends RouteBuilder {
         // onPrepareFailure is invoked once when all retries are exhausted, just before the message
         // is sent to the DLQ.  If the body was already deserialized (failure happened after unmarshal)
         // we publish a FAILURE reply in a new transaction so the orchestrator is not left waiting.
-        errorHandler(deadLetterChannel("kafka:" + dlqTopic + "?brokers=" + kafkaBrokers)
+        errorHandler(deadLetterChannel(
+                        "kafka:{{app.kafka.topics.dlq}}?brokers={{app.kafka.bootstrap-servers}}")
                         .maximumRedeliveries(3)
                         .redeliveryDelay(1000)
                         .useExponentialBackOff()
@@ -84,14 +66,14 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.command.invoice-pdf (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCommandTopic
-                        + "?brokers=" + kafkaBrokers
-                        + "&groupId=" + consumerGroupId
+        from("kafka:{{app.kafka.topics.saga-command-invoice-pdf}}"
+                        + "?brokers={{app.kafka.bootstrap-servers}}"
+                        + "&groupId={{app.kafka.consumer.group-id}}"
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
-                        + "&maxPollRecords=" + maxPollRecords
-                        + "&consumersCount=" + consumersCount)
+                        + "&maxPollRecords={{app.kafka.consumer.max-poll-records}}"
+                        + "&consumersCount={{app.kafka.consumer.consumers-count}}")
                         .routeId("saga-command-consumer")
                         .log("Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
                         .unmarshal().json(JsonLibrary.Jackson, ProcessInvoicePdfCommand.class)
@@ -106,14 +88,14 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         // CONSUMER ROUTE: saga.compensation.invoice-pdf (from orchestrator)
         // ============================================================
-        from("kafka:" + sagaCompensationTopic
-                        + "?brokers=" + kafkaBrokers
-                        + "&groupId=" + consumerGroupId
+        from("kafka:{{app.kafka.topics.saga-compensation-invoice-pdf}}"
+                        + "?brokers={{app.kafka.bootstrap-servers}}"
+                        + "&groupId={{app.kafka.consumer.group-id}}"
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
-                        + "&maxPollRecords=" + maxPollRecords
-                        + "&consumersCount=" + consumersCount)
+                        + "&maxPollRecords={{app.kafka.consumer.max-poll-records}}"
+                        + "&consumersCount={{app.kafka.consumer.consumers-count}}")
                         .routeId("saga-compensation-consumer")
                         .log("Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
                         .unmarshal().json(JsonLibrary.Jackson, CompensateInvoicePdfCommand.class)

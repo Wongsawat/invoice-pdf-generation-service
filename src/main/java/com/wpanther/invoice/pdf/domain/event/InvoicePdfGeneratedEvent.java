@@ -1,7 +1,6 @@
 package com.wpanther.invoice.pdf.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.wpanther.saga.domain.model.TraceEvent;
 import lombok.Getter;
@@ -38,8 +37,12 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
     @JsonProperty("xmlEmbedded")
     private final boolean xmlEmbedded;
 
+    @JsonProperty("correlationId")
+    private final String correlationId;
+
     /**
-     * Convenience constructor. correlationId is stored as sagaId in TraceEvent.
+     * Convenience constructor. sagaId is null — this is a notification event,
+     * not a saga-scoped event. correlationId is carried as its own field.
      */
     public InvoicePdfGeneratedEvent(
             String documentId,
@@ -50,21 +53,14 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
             boolean xmlEmbedded,
             String correlationId
     ) {
-        super(correlationId, SOURCE, TRACE_TYPE, null);
+        super(null, SOURCE, TRACE_TYPE, null);
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
-    }
-
-    /**
-     * Returns the correlation ID (stored as sagaId in TraceEvent).
-     */
-    @JsonIgnore
-    public String getCorrelationId() {
-        return getSagaId();
+        this.correlationId = correlationId;
     }
 
     @Override
@@ -87,7 +83,8 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
             @JsonProperty("invoiceNumber") String invoiceNumber,
             @JsonProperty("documentUrl") String documentUrl,
             @JsonProperty("fileSize") long fileSize,
-            @JsonProperty("xmlEmbedded") boolean xmlEmbedded
+            @JsonProperty("xmlEmbedded") boolean xmlEmbedded,
+            @JsonProperty("correlationId") String correlationId
     ) {
         super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
         this.documentId = documentId;
@@ -96,5 +93,6 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
+        this.correlationId = correlationId;
     }
 }

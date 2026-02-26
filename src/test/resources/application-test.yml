@@ -36,6 +36,8 @@ app:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: invoice-pdf-generation-service-test
+      consumers-count: 1
+      max-poll-records: 10
     topics:
       saga-command-invoice-pdf: saga.command.invoice-pdf
       saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
