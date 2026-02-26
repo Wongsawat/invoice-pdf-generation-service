@@ -57,6 +57,7 @@ app:
   pdf:
     generation:
       max-retries: 3
+      max-concurrent-renders: 2
   rest-client:
     connect-timeout: 5000
     read-timeout: 30000

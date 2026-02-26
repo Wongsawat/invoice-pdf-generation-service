@@ -4,11 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.fop.apps.Fop;
 import org.apache.fop.apps.FopFactory;
 import org.apache.fop.apps.MimeConstants;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
-import javax.xml.transform.Result;
-import javax.xml.transform.Source;
+import javax.xml.transform.Templates;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.sax.SAXResult;
@@ -19,12 +19,17 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Semaphore;
 
 /**
  * Generates PDF documents using Apache FOP with XSL-FO templates.
  *
  * This class transforms XML invoice data using an XSL-FO stylesheet
  * to produce PDF output.
+ *
+ * Thread-safety: the XSL template is pre-compiled once at startup into a
+ * {@link Templates} object (which is thread-safe by the JAXP contract).
+ * A fair {@link Semaphore} caps the number of concurrent FOP render jobs.
  */
 @Component
 @Slf4j
@@ -34,13 +39,23 @@ public class FopInvoicePdfGenerator {
     private static final String INVOICE_XSL_PATH = "xsl/invoice.xsl";
 
     private final FopFactory fopFactory;
-    private final TransformerFactory transformerFactory;
+    private final Templates compiledTemplate;   // thread-safe compiled XSL
+    private final Semaphore renderSemaphore;    // caps concurrent FOP renders
 
-    public FopInvoicePdfGenerator() {
+    public FopInvoicePdfGenerator(
+            @Value("${app.pdf.generation.max-concurrent-renders:3}") int maxConcurrentRenders) {
         try {
             this.fopFactory = createFopFactory();
-            this.transformerFactory = TransformerFactory.newInstance();
-            log.info("FopInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
+
+            // TransformerFactory used ONLY here (single-threaded at startup) — not retained
+            TransformerFactory tf = TransformerFactory.newInstance();
+            ClassPathResource xslResource = new ClassPathResource(INVOICE_XSL_PATH);
+            if (!xslResource.exists()) {
+                throw new IllegalStateException("XSL template not found: " + INVOICE_XSL_PATH);
+            }
+            this.compiledTemplate = tf.newTemplates(new StreamSource(xslResource.getInputStream()));
+            this.renderSemaphore  = new Semaphore(maxConcurrentRenders, true); // fair
+            log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={}", maxConcurrentRenders);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize FOP PDF generator", e);
         }
@@ -65,60 +80,34 @@ public class FopInvoicePdfGenerator {
     }
 
     /**
-     * Generate PDF from XML data using the invoice XSL-FO template.
+     * Generate PDF from XML data using the pre-compiled invoice XSL-FO template.
      *
      * @param xmlData The XML representation of invoice data
      * @return PDF bytes
      * @throws PdfGenerationException if generation fails
      */
     public byte[] generatePdf(String xmlData) throws PdfGenerationException {
-        return generatePdf(xmlData, INVOICE_XSL_PATH);
-    }
-
-    /**
-     * Generate PDF from XML data using a specified XSL-FO template.
-     *
-     * @param xmlData The XML representation of invoice data
-     * @param xslPath Path to the XSL-FO template (classpath resource)
-     * @return PDF bytes
-     * @throws PdfGenerationException if generation fails
-     */
-    public byte[] generatePdf(String xmlData, String xslPath) throws PdfGenerationException {
-        log.debug("Generating PDF with template: {}", xslPath);
-
+        log.debug("Awaiting render permit (available={})", renderSemaphore.availablePermits());
+        try {
+            renderSemaphore.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PdfGenerationException("PDF generation interrupted while waiting for render slot", e);
+        }
         try (ByteArrayOutputStream pdfOutput = new ByteArrayOutputStream()) {
-            // Load XSL template
-            ClassPathResource xslResource = new ClassPathResource(xslPath);
-            if (!xslResource.exists()) {
-                throw new PdfGenerationException("XSL template not found: " + xslPath);
-            }
-
-            // Create FOP instance
             Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, pdfOutput);
-
-            // Setup transformer with XSL
-            Source xslSource = new StreamSource(xslResource.getInputStream());
-            Transformer transformer = transformerFactory.newTransformer(xslSource);
-
-            // Setup input XML
-            Source xmlSource = new StreamSource(
-                new ByteArrayInputStream(xmlData.getBytes(StandardCharsets.UTF_8))
-            );
-
-            // Setup output
-            Result result = new SAXResult(fop.getDefaultHandler());
-
-            // Transform
-            transformer.transform(xmlSource, result);
-
+            Transformer transformer = compiledTemplate.newTransformer(); // per-call, thread-safe
+            StreamSource xmlSource = new StreamSource(
+                new ByteArrayInputStream(xmlData.getBytes(StandardCharsets.UTF_8)));
+            transformer.transform(xmlSource, new SAXResult(fop.getDefaultHandler()));
             byte[] pdfBytes = pdfOutput.toByteArray();
             log.info("Generated PDF: {} bytes", pdfBytes.length);
-
             return pdfBytes;
-
         } catch (Exception e) {
             log.error("Failed to generate PDF", e);
             throw new PdfGenerationException("PDF generation failed: " + e.getMessage(), e);
+        } finally {
+            renderSemaphore.release();
         }
     }
 
