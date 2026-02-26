@@ -43,6 +43,12 @@ public class SagaRouteConfig extends RouteBuilder {
     @Value("${app.kafka.consumer.group-id}")
     private String consumerGroupId;
 
+    @Value("${app.kafka.consumer.consumers-count:3}")
+    private int consumersCount;
+
+    @Value("${app.kafka.consumer.max-poll-records:100}")
+    private int maxPollRecords;
+
     public SagaRouteConfig(SagaCommandHandler sagaCommandHandler) {
         this.sagaCommandHandler = sagaCommandHandler;
     }
@@ -84,8 +90,8 @@ public class SagaRouteConfig extends RouteBuilder {
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
-                        + "&maxPollRecords=100"
-                        + "&consumersCount=3")
+                        + "&maxPollRecords=" + maxPollRecords
+                        + "&consumersCount=" + consumersCount)
                         .routeId("saga-command-consumer")
                         .log("Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
                         .unmarshal().json(JsonLibrary.Jackson, ProcessInvoicePdfCommand.class)
@@ -106,8 +112,8 @@ public class SagaRouteConfig extends RouteBuilder {
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
-                        + "&maxPollRecords=100"
-                        + "&consumersCount=3")
+                        + "&maxPollRecords=" + maxPollRecords
+                        + "&consumersCount=" + consumersCount)
                         .routeId("saga-compensation-consumer")
                         .log("Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
                         .unmarshal().json(JsonLibrary.Jackson, CompensateInvoicePdfCommand.class)

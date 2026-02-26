@@ -12,7 +12,7 @@ class FopInvoicePdfGeneratorTest {
     private FopInvoicePdfGenerator generator;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         // Constructor loads FOP config (falls back to default if missing — no exception)
         generator = new FopInvoicePdfGenerator();
     }

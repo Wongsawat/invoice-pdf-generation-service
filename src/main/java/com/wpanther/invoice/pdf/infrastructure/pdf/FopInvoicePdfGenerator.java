@@ -36,10 +36,14 @@ public class FopInvoicePdfGenerator {
     private final FopFactory fopFactory;
     private final TransformerFactory transformerFactory;
 
-    public FopInvoicePdfGenerator() throws Exception {
-        this.fopFactory = createFopFactory();
-        this.transformerFactory = TransformerFactory.newInstance();
-        log.info("FopInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
+    public FopInvoicePdfGenerator() {
+        try {
+            this.fopFactory = createFopFactory();
+            this.transformerFactory = TransformerFactory.newInstance();
+            log.info("FopInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to initialize FOP PDF generator", e);
+        }
     }
 
     private FopFactory createFopFactory() throws Exception {

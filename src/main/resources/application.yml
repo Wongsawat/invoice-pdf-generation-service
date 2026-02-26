@@ -47,6 +47,8 @@ app:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:
       group-id: invoice-pdf-generation-service
+      consumers-count: ${KAFKA_CONSUMERS_COUNT:3}
+      max-poll-records: ${KAFKA_MAX_POLL_RECORDS:100}
     topics:
       saga-command-invoice-pdf: saga.command.invoice-pdf
       saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
