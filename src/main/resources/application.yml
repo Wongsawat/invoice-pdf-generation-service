@@ -37,9 +37,6 @@ camel:
   dataformat:
     jackson:
       auto-discover-object-mapper: true
-  component:
-    kafka:
-      brokers: ${KAFKA_BROKERS:localhost:9092}
 
 # Application-specific configuration
 app:
@@ -49,6 +46,7 @@ app:
       group-id: invoice-pdf-generation-service
       consumers-count: ${KAFKA_CONSUMERS_COUNT:3}
       max-poll-records: ${KAFKA_MAX_POLL_RECORDS:100}
+      break-on-first-error: ${KAFKA_BREAK_ON_FIRST_ERROR:true}
     topics:
       saga-command-invoice-pdf: saga.command.invoice-pdf
       saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
@@ -94,6 +92,12 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 # Resilience4j circuit breaker for MinIO storage
 resilience4j:

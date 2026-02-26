@@ -71,7 +71,7 @@ public class SagaRouteConfig extends RouteBuilder {
                         + "&groupId={{app.kafka.consumer.group-id}}"
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
-                        + "&breakOnFirstError=true"
+                        + "&breakOnFirstError={{app.kafka.consumer.break-on-first-error}}"
                         + "&maxPollRecords={{app.kafka.consumer.max-poll-records}}"
                         + "&consumersCount={{app.kafka.consumer.consumers-count}}")
                         .routeId("saga-command-consumer")
@@ -93,7 +93,7 @@ public class SagaRouteConfig extends RouteBuilder {
                         + "&groupId={{app.kafka.consumer.group-id}}"
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
-                        + "&breakOnFirstError=true"
+                        + "&breakOnFirstError={{app.kafka.consumer.break-on-first-error}}"
                         + "&maxPollRecords={{app.kafka.consumer.max-poll-records}}"
                         + "&consumersCount={{app.kafka.consumer.consumers-count}}")
                         .routeId("saga-compensation-consumer")

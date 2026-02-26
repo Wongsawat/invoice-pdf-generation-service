@@ -7,6 +7,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
+import java.io.StringWriter;
+
 /**
  * Implementation of InvoicePdfGenerationService using Apache FOP and PDFBox.
  *
@@ -61,93 +66,115 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
 
     /**
      * Convert invoice JSON data to XML format for XSL-FO processing.
+     * Uses XMLStreamWriter for correct automatic escaping of XML special characters.
      */
     private String convertJsonToXml(String invoiceDataJson, String invoiceNumber) throws Exception {
-        StringBuilder xml = new StringBuilder();
-        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        xml.append("<invoice>\n");
+        XMLOutputFactory factory = XMLOutputFactory.newInstance();
+        StringWriter sw = new StringWriter();
+        XMLStreamWriter writer = factory.createXMLStreamWriter(sw);
 
         try {
             JsonNode root = objectMapper.readTree(invoiceDataJson);
 
+            writer.writeStartDocument("UTF-8", "1.0");
+            writer.writeStartElement("invoice");
+
             // Invoice header
-            appendElement(xml, "invoiceNumber", getTextValue(root, "invoiceNumber", invoiceNumber));
-            appendElement(xml, "invoiceDate", getTextValue(root, "invoiceDate", ""));
-            appendElement(xml, "dueDate", getTextValue(root, "dueDate", ""));
-            appendElement(xml, "documentType", getTextValue(root, "documentType", "Invoice"));
-            appendElement(xml, "purchaseOrderNumber", getTextValue(root, "purchaseOrderNumber", ""));
+            writeElement(writer, "invoiceNumber", getTextValue(root, "invoiceNumber", invoiceNumber));
+            writeElement(writer, "invoiceDate",        getTextValue(root, "invoiceDate", ""));
+            writeElement(writer, "dueDate",            getTextValue(root, "dueDate", ""));
+            writeElement(writer, "documentType",       getTextValue(root, "documentType", "Invoice"));
+            writeElement(writer, "purchaseOrderNumber", getTextValue(root, "purchaseOrderNumber", ""));
 
             // Seller information
-            xml.append("  <seller>\n");
+            writer.writeStartElement("seller");
             JsonNode seller = root.path("seller");
-            appendElement(xml, "name", getTextValue(seller, "name", ""), 4);
-            appendElement(xml, "taxId", getTextValue(seller, "taxId", ""), 4);
-            appendElement(xml, "branchId", getTextValue(seller, "branchId", ""), 4);
-            appendElement(xml, "branchName", getTextValue(seller, "branchName", ""), 4);
-            appendElement(xml, "address", getTextValue(seller, "address", ""), 4);
-            appendElement(xml, "phone", getTextValue(seller, "phone", ""), 4);
-            appendElement(xml, "email", getTextValue(seller, "email", ""), 4);
-            xml.append("  </seller>\n");
+            writeElement(writer, "name",       getTextValue(seller, "name", ""));
+            writeElement(writer, "taxId",      getTextValue(seller, "taxId", ""));
+            writeElement(writer, "branchId",   getTextValue(seller, "branchId", ""));
+            writeElement(writer, "branchName", getTextValue(seller, "branchName", ""));
+            writeElement(writer, "address",    getTextValue(seller, "address", ""));
+            writeElement(writer, "phone",      getTextValue(seller, "phone", ""));
+            writeElement(writer, "email",      getTextValue(seller, "email", ""));
+            writer.writeEndElement(); // seller
 
             // Buyer information
-            xml.append("  <buyer>\n");
+            writer.writeStartElement("buyer");
             JsonNode buyer = root.path("buyer");
-            appendElement(xml, "name", getTextValue(buyer, "name", ""), 4);
-            appendElement(xml, "taxId", getTextValue(buyer, "taxId", ""), 4);
-            appendElement(xml, "branchId", getTextValue(buyer, "branchId", ""), 4);
-            appendElement(xml, "branchName", getTextValue(buyer, "branchName", ""), 4);
-            appendElement(xml, "address", getTextValue(buyer, "address", ""), 4);
-            appendElement(xml, "phone", getTextValue(buyer, "phone", ""), 4);
-            appendElement(xml, "email", getTextValue(buyer, "email", ""), 4);
-            xml.append("  </buyer>\n");
+            writeElement(writer, "name",       getTextValue(buyer, "name", ""));
+            writeElement(writer, "taxId",      getTextValue(buyer, "taxId", ""));
+            writeElement(writer, "branchId",   getTextValue(buyer, "branchId", ""));
+            writeElement(writer, "branchName", getTextValue(buyer, "branchName", ""));
+            writeElement(writer, "address",    getTextValue(buyer, "address", ""));
+            writeElement(writer, "phone",      getTextValue(buyer, "phone", ""));
+            writeElement(writer, "email",      getTextValue(buyer, "email", ""));
+            writer.writeEndElement(); // buyer
 
             // Line items
-            xml.append("  <lineItems>\n");
+            writer.writeStartElement("lineItems");
             JsonNode lineItems = root.path("lineItems");
             if (lineItems.isArray()) {
                 for (JsonNode item : lineItems) {
-                    xml.append("    <item>\n");
-                    appendElement(xml, "itemCode", getTextValue(item, "itemCode", ""), 6);
-                    appendElement(xml, "description", getTextValue(item, "description", ""), 6);
-                    appendElement(xml, "quantity", getTextValue(item, "quantity", "0"), 6);
-                    appendElement(xml, "unit", getTextValue(item, "unit", ""), 6);
-                    appendElement(xml, "unitPrice", getTextValue(item, "unitPrice", "0"), 6);
-                    appendElement(xml, "amount", getTextValue(item, "amount", "0"), 6);
-                    xml.append("    </item>\n");
+                    writer.writeStartElement("item");
+                    writeElement(writer, "itemCode",    getTextValue(item, "itemCode", ""));
+                    writeElement(writer, "description", getTextValue(item, "description", ""));
+                    writeElement(writer, "quantity",    getTextValue(item, "quantity", "0"));
+                    writeElement(writer, "unit",        getTextValue(item, "unit", ""));
+                    writeElement(writer, "unitPrice",   getTextValue(item, "unitPrice", "0"));
+                    writeElement(writer, "amount",      getTextValue(item, "amount", "0"));
+                    writer.writeEndElement(); // item
                 }
             }
-            xml.append("  </lineItems>\n");
+            writer.writeEndElement(); // lineItems
 
             // Totals
-            appendElement(xml, "subtotal", getTextValue(root, "subtotal", "0"));
-            appendElement(xml, "discount", getTextValue(root, "discount", "0"));
-            appendElement(xml, "amountBeforeVat", getTextValue(root, "amountBeforeVat", "0"));
-            appendElement(xml, "vatRate", getTextValue(root, "vatRate", "7"));
-            appendElement(xml, "vatAmount", getTextValue(root, "vatAmount", "0"));
-            appendElement(xml, "grandTotal", getTextValue(root, "grandTotal", "0"));
-            appendElement(xml, "amountInWords", getTextValue(root, "amountInWords", ""));
+            writeElement(writer, "subtotal",        getTextValue(root, "subtotal", "0"));
+            writeElement(writer, "discount",        getTextValue(root, "discount", "0"));
+            writeElement(writer, "amountBeforeVat", getTextValue(root, "amountBeforeVat", "0"));
+            writeElement(writer, "vatRate",         getTextValue(root, "vatRate", "7"));
+            writeElement(writer, "vatAmount",       getTextValue(root, "vatAmount", "0"));
+            writeElement(writer, "grandTotal",      getTextValue(root, "grandTotal", "0"));
+            writeElement(writer, "amountInWords",   getTextValue(root, "amountInWords", ""));
 
             // Payment information (optional)
             JsonNode paymentInfo = root.path("paymentInfo");
             if (!paymentInfo.isMissingNode()) {
-                xml.append("  <paymentInfo>\n");
-                appendElement(xml, "method", getTextValue(paymentInfo, "method", ""), 4);
-                appendElement(xml, "bankName", getTextValue(paymentInfo, "bankName", ""), 4);
-                appendElement(xml, "accountNumber", getTextValue(paymentInfo, "accountNumber", ""), 4);
-                appendElement(xml, "accountName", getTextValue(paymentInfo, "accountName", ""), 4);
-                xml.append("  </paymentInfo>\n");
+                writer.writeStartElement("paymentInfo");
+                writeElement(writer, "method",        getTextValue(paymentInfo, "method", ""));
+                writeElement(writer, "bankName",      getTextValue(paymentInfo, "bankName", ""));
+                writeElement(writer, "accountNumber", getTextValue(paymentInfo, "accountNumber", ""));
+                writeElement(writer, "accountName",   getTextValue(paymentInfo, "accountName", ""));
+                writer.writeEndElement(); // paymentInfo
             }
 
             // Notes
-            appendElement(xml, "notes", getTextValue(root, "notes", ""));
+            writeElement(writer, "notes", getTextValue(root, "notes", ""));
+
+            writer.writeEndElement(); // invoice
+            writer.writeEndDocument();
+            writer.flush();
 
         } catch (Exception e) {
             log.error("Failed to parse invoice JSON for invoice {}: {}", invoiceNumber, e.getMessage());
             throw e;  // propagate — generatePdf wraps this in InvoicePdfGenerationException
+        } finally {
+            writer.close();
         }
 
-        xml.append("</invoice>\n");
-        return xml.toString();
+        return sw.toString();
+    }
+
+    /**
+     * Write a non-empty text element. Skipped when value is null or blank —
+     * consistent with the XSL-FO template which uses xsl:if to handle absent fields.
+     * XMLStreamWriter.writeCharacters() automatically escapes &, <, > in text content.
+     */
+    private void writeElement(XMLStreamWriter writer, String name, String value) throws XMLStreamException {
+        if (value != null && !value.isEmpty()) {
+            writer.writeStartElement(name);
+            writer.writeCharacters(value);
+            writer.writeEndElement();
+        }
     }
 
     private String getTextValue(JsonNode node, String fieldName, String defaultValue) {
@@ -156,30 +183,5 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
             return defaultValue;
         }
         return field.asText(defaultValue);
-    }
-
-    private void appendElement(StringBuilder xml, String name, String value) {
-        appendElement(xml, name, value, 2);
-    }
-
-    private void appendElement(StringBuilder xml, String name, String value, int indent) {
-        if (value != null && !value.isEmpty()) {
-            xml.append(" ".repeat(indent))
-               .append("<").append(name).append(">")
-               .append(escapeXml(value))
-               .append("</").append(name).append(">\n");
-        }
-    }
-
-    private String escapeXml(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;");
     }
 }

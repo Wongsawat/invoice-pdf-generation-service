@@ -38,6 +38,7 @@ app:
       group-id: invoice-pdf-generation-service-test
       consumers-count: 1
       max-poll-records: 10
+      break-on-first-error: true
     topics:
       saga-command-invoice-pdf: saga.command.invoice-pdf
       saga-compensation-invoice-pdf: saga.compensation.invoice-pdf
@@ -64,6 +65,11 @@ app:
 eureka:
   client:
     enabled: false
+
+management:
+  tracing:
+    sampling:
+      probability: 0.0  # no traces exported in tests
 
 logging:
   level:

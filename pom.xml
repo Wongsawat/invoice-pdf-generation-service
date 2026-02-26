@@ -196,6 +196,17 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- Distributed tracing: Micrometer → OpenTelemetry bridge + OTLP exporter -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
         <!-- Resilience4j for circuit breaker on MinIO calls -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

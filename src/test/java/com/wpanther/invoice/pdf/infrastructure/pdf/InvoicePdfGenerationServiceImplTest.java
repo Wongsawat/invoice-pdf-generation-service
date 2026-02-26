@@ -129,7 +129,7 @@ class InvoicePdfGenerationServiceImplTest {
     }
 
     @Test
-    @DisplayName("XML special characters are escaped: & < > \" '")
+    @DisplayName("XML special characters are escaped: & < >  (single quotes are valid unescaped in text content)")
     void generatePdf_specialCharsEscapedInXml() throws Exception {
         String jsonWithSpecialChars = """
                 {
@@ -145,12 +145,14 @@ class InvoicePdfGenerationServiceImplTest {
 
         verify(fopGenerator).generatePdf(xmlCaptor.capture());
         String xml = xmlCaptor.getValue();
+        // XMLStreamWriter.writeCharacters() escapes & and < but leaves > and ' unescaped
+        // (only < and & are required to be escaped in element text content per XML spec)
         assertThat(xml)
-                .contains("&amp;")
-                .contains("&lt;")
-                .contains("&gt;")
-                .contains("&apos;")
-                .doesNotContain("A & B <Co>");
+                .contains("&amp;")              // & must be escaped
+                .contains("&lt;")               // < must be escaped
+                .contains("Co>")                // > is left as-is (valid in text content)
+                .contains("'Ltd'")              // ' is left as-is (valid in text content)
+                .doesNotContain("A & B <Co>");  // unescaped & and < must not appear
     }
 
     @Test
