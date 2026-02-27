@@ -27,6 +27,14 @@ public class OutboxConfig {
 
     @Bean
     public RestTemplate restTemplate() {
+        if (connectTimeout <= 0) {
+            throw new IllegalStateException(
+                    "app.rest-client.connect-timeout must be > 0, got: " + connectTimeout);
+        }
+        if (readTimeout <= 0) {
+            throw new IllegalStateException(
+                    "app.rest-client.read-timeout must be > 0, got: " + readTimeout);
+        }
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeout);
         factory.setReadTimeout(readTimeout);

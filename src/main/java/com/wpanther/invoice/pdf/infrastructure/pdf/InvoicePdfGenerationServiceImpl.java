@@ -208,7 +208,9 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
             log.error("Failed to parse invoice JSON for invoice {}: {}", invoiceNumber, e.getMessage());
             throw e;  // propagate — generatePdf wraps this in InvoicePdfGenerationException
         } finally {
-            try { writer.close(); } catch (Exception ignored) {}
+            try { writer.close(); } catch (Exception ex) {
+                log.debug("XMLStreamWriter.close() threw during cleanup (suppressed): {}", ex.getMessage());
+            }
         }
 
         return sw.toString();

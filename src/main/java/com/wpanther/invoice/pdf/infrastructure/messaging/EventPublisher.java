@@ -54,6 +54,7 @@ public class EventPublisher implements PdfEventPort {
                 MessagingUtils.toJson(headers, objectMapper)
         );
 
-        log.info("Published InvoicePdfGeneratedEvent to outbox for notification: {}", event.getInvoiceNumber());
+        log.info("Published InvoicePdfGeneratedEvent to outbox: invoiceNumber={} documentId={} correlationId={}",
+                event.getInvoiceNumber(), event.getDocumentId(), event.getCorrelationId());
     }
 }

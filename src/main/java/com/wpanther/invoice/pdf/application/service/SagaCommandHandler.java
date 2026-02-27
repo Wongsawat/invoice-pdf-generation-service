@@ -74,6 +74,7 @@ public class SagaCommandHandler {
         MDC.put(MDC_SAGA_ID,        command.getSagaId());
         MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
         MDC.put(MDC_INVOICE_NUMBER, command.getInvoiceNumber());
+        MDC.put(MDC_INVOICE_ID,     command.getInvoiceId());
         try {
             log.info("Handling ProcessInvoicePdfCommand for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceNumber());
@@ -166,7 +167,7 @@ public class SagaCommandHandler {
                                     s3Key, command.getSagaId());
                         } catch (Exception deleteEx) {
                             log.error("[ORPHAN_PDF] s3Key={} saga={} invoiceNumber={} error={} — manual recovery required: delete object from MinIO bucket",
-                                    s3Key, command.getSagaId(), invoiceNumber, deleteEx.getMessage());
+                                    s3Key, command.getSagaId(), invoiceNumber, describeThrowable(deleteEx));
                         }
                     }
                     log.error("PDF generation/upload failed for saga {} invoice {}: {}",

@@ -26,7 +26,7 @@ public class MinioStorageAdapter implements PdfStoragePort {
 
     private final S3Client s3Client;
     private final String bucketName;
-    private final String baseUrl;
+    private final String baseUrl;   // trimmed: no trailing slash
     private final Timer storeTimer;
     private final Timer deleteTimer;
 
@@ -44,7 +44,7 @@ public class MinioStorageAdapter implements PdfStoragePort {
         }
         this.s3Client    = s3Client;
         this.bucketName  = bucketName;
-        this.baseUrl     = baseUrl;
+        this.baseUrl     = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.storeTimer  = meterRegistry.timer("pdf.minio.store",  "bucket", bucketName);
         this.deleteTimer = meterRegistry.timer("pdf.minio.delete", "bucket", bucketName);
     }
@@ -84,9 +84,8 @@ public class MinioStorageAdapter implements PdfStoragePort {
 
     @Override
     public String resolveUrl(String key) {
-        String base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         String normalizedKey = key.startsWith("/") ? key.substring(1) : key;
-        return base + "/" + normalizedKey;
+        return baseUrl + "/" + normalizedKey;
     }
 
     private String buildKey(String invoiceNumber) {

@@ -28,33 +28,40 @@ import java.util.UUID;
 @Builder
 public class InvoicePdfDocumentEntity {
 
+    static final int COL_LEN_ID           = 100;
+    static final int COL_LEN_INVOICE_NUM  = 50;
+    static final int COL_LEN_DOC_PATH     = 500;
+    static final int COL_LEN_DOC_URL      = 1000;
+    static final int COL_LEN_MIME_TYPE    = 100;
+    static final int COL_LEN_STATUS       = 20;
+
     @Id
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Column(name = "invoice_id", nullable = false, length = 100)
+    @Column(name = "invoice_id", nullable = false, length = COL_LEN_ID)
     private String invoiceId;
 
-    @Column(name = "invoice_number", nullable = false, length = 50)
+    @Column(name = "invoice_number", nullable = false, length = COL_LEN_INVOICE_NUM)
     private String invoiceNumber;
 
-    @Column(name = "document_path", length = 500)
+    @Column(name = "document_path", length = COL_LEN_DOC_PATH)
     private String documentPath;
 
-    @Column(name = "document_url", length = 1000)
+    @Column(name = "document_url", length = COL_LEN_DOC_URL)
     private String documentUrl;
 
     @Column(name = "file_size")
     private Long fileSize;
 
-    @Column(name = "mime_type", nullable = false, length = 100)
+    @Column(name = "mime_type", nullable = false, length = COL_LEN_MIME_TYPE)
     private String mimeType;
 
     @Column(name = "xml_embedded", nullable = false)
     private Boolean xmlEmbedded;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = COL_LEN_STATUS)
     private GenerationStatus status;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
