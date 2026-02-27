@@ -16,7 +16,8 @@ public class InvoicePdfReplyEvent extends SagaReply {
     private static final long serialVersionUID = 1L;
 
     private final String pdfUrl;
-    private final Long pdfSize;
+    /** 0L for FAILURE / COMPENSATED replies — only meaningful when status == SUCCESS. */
+    private final long pdfSize;
 
     public static InvoicePdfReplyEvent success(String sagaId, SagaStep sagaStep, String correlationId,
                                                String pdfUrl, long pdfSize) {
@@ -33,7 +34,7 @@ public class InvoicePdfReplyEvent extends SagaReply {
     }
 
     private InvoicePdfReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, ReplyStatus status,
-                                 String pdfUrl, Long pdfSize) {
+                                 String pdfUrl, long pdfSize) {
         super(sagaId, sagaStep, correlationId, status);
         this.pdfUrl = pdfUrl;
         this.pdfSize = pdfSize;
@@ -42,20 +43,20 @@ public class InvoicePdfReplyEvent extends SagaReply {
     private InvoicePdfReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, ReplyStatus status) {
         super(sagaId, sagaStep, correlationId, status);
         this.pdfUrl = null;
-        this.pdfSize = null;
+        this.pdfSize = 0L;
     }
 
     private InvoicePdfReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         super(sagaId, sagaStep, correlationId, errorMessage);
         this.pdfUrl = null;
-        this.pdfSize = null;
+        this.pdfSize = 0L;
     }
 
     public String getPdfUrl() {
         return pdfUrl;
     }
 
-    public Long getPdfSize() {
+    public long getPdfSize() {
         return pdfSize;
     }
 }

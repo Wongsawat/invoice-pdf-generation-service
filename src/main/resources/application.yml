@@ -65,6 +65,8 @@ app:
   pdf:
     icc-profile-path: ${PDF_ICC_PROFILE_PATH:icc/sRGB.icc}
     generation:
+      # Number of retries allowed after the initial attempt (total attempts = max-retries + 1).
+      # Example: max-retries=3 → 1 initial attempt + 3 retries = 4 total attempts before the saga step fails.
       max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
       max-concurrent-renders: ${PDF_MAX_CONCURRENT_RENDERS:3}
       max-pdf-size-bytes: ${PDF_MAX_SIZE_BYTES:52428800}

@@ -192,6 +192,16 @@ public class InvoicePdfDocument {
         return version;
     }
 
+    /**
+     * Returns {@code true} when the retry limit has been reached.
+     *
+     * <p>{@code maxRetries} is the number of retries permitted <em>after</em> the
+     * initial attempt (i.e. {@code max-retries=3} allows 1 + 3 = 4 total attempts).
+     * This method should be checked against the stored {@code retryCount} <em>before</em>
+     * beginning a new attempt; the count is incremented at the end of each failed attempt.
+     *
+     * @param maxRetries the configured {@code app.pdf.generation.max-retries} value
+     */
     public boolean isMaxRetriesExceeded(int maxRetries) {
         return this.retryCount >= maxRetries;
     }

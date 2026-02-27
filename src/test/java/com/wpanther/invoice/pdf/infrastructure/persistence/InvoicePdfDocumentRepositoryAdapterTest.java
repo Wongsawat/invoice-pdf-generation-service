@@ -118,7 +118,7 @@ class InvoicePdfDocumentRepositoryAdapterTest {
     }
 
     // toDomain_nullFileSize_defaultsToZero intentionally removed:
-    // file_size is NOT NULL in the database (V3 migration), so null values
+    // file_size is NOT NULL in the database (V1 migration), so null values
     // can no longer come from JPA. The adapter no longer needs null guards.
 
     @Test
@@ -132,7 +132,7 @@ class InvoicePdfDocumentRepositoryAdapterTest {
     }
 
     // toDomain_nullRetryCount_defaultsToZero intentionally removed:
-    // retry_count is NOT NULL in the database (V3 migration), so null values
+    // retry_count is NOT NULL in the database (V1 migration), so null values
     // can no longer come from JPA. The adapter no longer needs null guards.
 
     // -------------------------------------------------------------------------
