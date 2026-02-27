@@ -151,10 +151,11 @@ class PdfA3ConverterTest {
     }
 
     @Test
-    @DisplayName("Constructor with non-existent ICC path falls back to built-in profile without throwing")
-    void constructor_nonExistentIccProfilePath_doesNotThrow() {
-        assertThatCode(() -> new PdfA3Converter("icc/does-not-exist.icc", new SimpleMeterRegistry()))
-                .doesNotThrowAnyException();
+    @DisplayName("Constructor with non-existent ICC path throws IllegalStateException (fail-fast)")
+    void constructor_nonExistentIccProfilePath_throwsIllegalStateException() {
+        assertThatThrownBy(() -> new PdfA3Converter("icc/does-not-exist.icc", new SimpleMeterRegistry()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("icc/does-not-exist.icc");
     }
 
     // -------------------------------------------------------------------------

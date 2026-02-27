@@ -52,6 +52,10 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
 
         log.info("Starting PDF generation for invoice: {}", invoiceNumber);
 
+        if (xmlContent == null || xmlContent.isBlank()) {
+            throw new InvoicePdfGenerationException(
+                    "xmlContent (signed XML) is null or blank for invoice: " + invoiceNumber);
+        }
         if (invoiceDataJson == null) {
             throw new InvoicePdfGenerationException(
                     "invoiceDataJson is null for invoice: " + invoiceNumber);

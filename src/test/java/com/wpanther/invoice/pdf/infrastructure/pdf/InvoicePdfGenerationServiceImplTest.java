@@ -167,6 +167,28 @@ class InvoicePdfGenerationServiceImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // xmlContent guards
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Null xmlContent → InvoicePdfGenerationException before FOP")
+    void generatePdf_nullXmlContent_throwsException() {
+        assertThatThrownBy(() -> service.generatePdf(INVOICE_NUMBER, null, FULL_JSON))
+                .isInstanceOf(InvoicePdfGenerationException.class)
+                .hasMessageContaining("xmlContent");
+        verifyNoInteractions(fopGenerator, pdfA3Converter);
+    }
+
+    @Test
+    @DisplayName("Blank xmlContent → InvoicePdfGenerationException before FOP")
+    void generatePdf_blankXmlContent_throwsException() {
+        assertThatThrownBy(() -> service.generatePdf(INVOICE_NUMBER, "   ", FULL_JSON))
+                .isInstanceOf(InvoicePdfGenerationException.class)
+                .hasMessageContaining("xmlContent");
+        verifyNoInteractions(fopGenerator, pdfA3Converter);
+    }
+
+    // -------------------------------------------------------------------------
     // M2 fix: invalid JSON must propagate, not silently degrade
     // -------------------------------------------------------------------------
 

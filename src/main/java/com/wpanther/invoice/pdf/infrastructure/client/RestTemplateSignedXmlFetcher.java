@@ -77,6 +77,28 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
         }
     }
 
+    /**
+     * Returns {@code true} when {@code host} is an IPv4/IPv6 literal in a private or loopback
+     * range: 127.x, 10.x, 172.16–31.x, 192.168.x, 169.254.x (link-local), or {@code ::1}.
+     * Hostnames (e.g. {@code localhost}) always return {@code false}.
+     */
+    private static boolean isPrivateIpLiteral(String host) {
+        if (host.startsWith("127.") || host.equals("::1")) return true;
+        if (host.startsWith("169.254."))                   return true;
+        if (host.startsWith("10."))                        return true;
+        if (host.startsWith("192.168."))                   return true;
+        if (host.startsWith("172.")) {
+            String[] parts = host.split("\\.", -1);
+            if (parts.length >= 2) {
+                try {
+                    int second = Integer.parseInt(parts[1]);
+                    return second >= 16 && second <= 31;
+                } catch (NumberFormatException ignored) { }
+            }
+        }
+        return false;
+    }
+
     private void validateUrl(String url) {
         try {
             URI uri = URI.create(url);
@@ -93,6 +115,14 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
             if (host == null || !allowedHosts.contains(host.toLowerCase())) {
                 throw new SignedXmlFetchException(
                         "Rejected URL with disallowed host: " + host + ". Allowed hosts: " + allowedHosts);
+            }
+
+            // Defense-in-depth: reject private IP literals even if explicitly listed in the
+            // allowlist. Private IPs should never appear in a production allowlist, and allowing
+            // them enables SSRF via misconfiguration. Use hostnames instead.
+            if (isPrivateIpLiteral(host)) {
+                throw new SignedXmlFetchException(
+                        "Rejected URL with private IP literal: " + host + ". Use a hostname instead.");
             }
         } catch (SignedXmlFetchException e) {
             throw e;

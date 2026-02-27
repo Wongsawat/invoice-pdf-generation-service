@@ -212,34 +212,26 @@ public class PdfA3Converter {
 
     /**
      * Load the ICC profile from the classpath once at startup.
-     * Returns null if the profile cannot be found, in which case color
-     * profile setup will be skipped (PDF/A compliance may be degraded).
+     * Throws {@link IllegalStateException} if the profile is missing or unreadable so that
+     * the service fails fast rather than silently producing non-PDF/A-compliant documents.
+     * The CMYK fallback was removed: using a CMYK profile for an RGB document violates
+     * PDF/A-3b conformance requirements.
      */
-    private byte[] loadIccProfile(String profilePath) {
-        try {
-            ClassPathResource iccResource = new ClassPathResource(profilePath);
-            if (iccResource.exists()) {
-                try (InputStream is = iccResource.getInputStream()) {
-                    byte[] bytes = is.readAllBytes();
-                    log.info("Loaded ICC profile: {} ({} bytes)", profilePath, bytes.length);
-                    return bytes;
-                }
-            }
-            log.warn("ICC profile not found at {}, trying built-in fallback", profilePath);
-            InputStream fallback = PdfA3Converter.class.getResourceAsStream(
-                    "/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
-            if (fallback != null) {
-                try (InputStream is = fallback) {
-                    byte[] bytes = is.readAllBytes();
-                    log.warn("Using built-in fallback ICC profile ({} bytes)", bytes.length);
-                    return bytes;
-                }
-            }
-        } catch (IOException e) {
-            log.warn("Failed to load ICC profile, PDF/A color profile will be skipped: {}", e.getMessage());
+    private static byte[] loadIccProfile(String profilePath) {
+        ClassPathResource iccResource = new ClassPathResource(profilePath);
+        if (!iccResource.exists()) {
+            throw new IllegalStateException(
+                    "ICC profile not found on classpath: " + profilePath
+                    + " — add sRGB.icc to src/main/resources/icc/ (PDF/A-3 compliance requires it)");
         }
-        log.warn("No ICC profile available; PDF/A color profile will be skipped");
-        return null;
+        try (InputStream is = iccResource.getInputStream()) {
+            byte[] bytes = is.readAllBytes();
+            log.info("Loaded ICC profile: {} ({} bytes)", profilePath, bytes.length);
+            return bytes;
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Failed to read ICC profile from " + profilePath + ": " + e.getMessage(), e);
+        }
     }
 
     /**

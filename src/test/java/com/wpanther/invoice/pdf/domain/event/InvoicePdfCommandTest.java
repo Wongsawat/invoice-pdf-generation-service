@@ -50,6 +50,16 @@ class InvoicePdfCommandTest {
     }
 
     @Test
+    @DisplayName("CompensateInvoicePdfCommand rejects null documentId")
+    void compensateCommand_nullDocumentId_throwsNullPointerException() {
+        assertThatThrownBy(() ->
+                new CompensateInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
+                        null, "inv-001"))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("documentId");
+    }
+
+    @Test
     @DisplayName("CompensateInvoicePdfCommand rejects null invoiceId")
     void compensateCommand_nullInvoiceId_throwsNullPointerException() {
         assertThatThrownBy(() ->

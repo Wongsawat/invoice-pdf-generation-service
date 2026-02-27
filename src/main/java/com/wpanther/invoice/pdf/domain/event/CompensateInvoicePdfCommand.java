@@ -47,7 +47,7 @@ public class CompensateInvoicePdfCommand extends SagaCommand {
     public CompensateInvoicePdfCommand(String sagaId, SagaStep sagaStep, String correlationId,
                                         String documentId, String invoiceId) {
         super(sagaId, sagaStep, correlationId);
-        this.documentId = documentId;
+        this.documentId = Objects.requireNonNull(documentId, "documentId is required");
         this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
     }
 }

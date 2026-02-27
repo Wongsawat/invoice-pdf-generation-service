@@ -118,6 +118,47 @@ class RestTemplateSignedXmlFetcherTest {
     }
 
     @Test
+    void fetch_loopbackIpLiteralInAllowlist_stillRejected() {
+        // Even when 127.0.0.1 is explicitly in the allowlist, it is rejected as a private IP
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost,127.0.0.1");
+
+        assertThatThrownBy(() -> fetcher.fetch("http://127.0.0.1/invoices/signed.xml"))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("private IP");
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void fetch_rfc1918IpLiteralInAllowlist_stillRejected() {
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "10.0.0.5");
+
+        assertThatThrownBy(() -> fetcher.fetch("http://10.0.0.5/invoices/signed.xml"))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("private IP");
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void fetch_172_16_ipLiteralInAllowlist_stillRejected() {
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "172.16.0.1");
+
+        assertThatThrownBy(() -> fetcher.fetch("http://172.16.0.1/invoices/signed.xml"))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("private IP");
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void fetch_localhostHostname_notBlockedByPrivateIpCheck() {
+        // "localhost" is a hostname, not an IP literal — should pass the private IP check
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
+        String url = "http://localhost:9000/invoices/signed.xml";
+        when(restTemplate.getForObject(url, String.class)).thenReturn("<invoice/>");
+
+        assertThat(fetcher.fetch(url)).isEqualTo("<invoice/>");
+    }
+
+    @Test
     void fetch_4xxResponse_throwsExceptionWithVerifyMessage() {
         var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
         String url = "http://localhost:9000/invoices/missing.xml";
