@@ -108,6 +108,14 @@ class FopInvoicePdfGeneratorTest {
     }
 
     @Test
+    @DisplayName("checkFontAvailability() logs missing fonts without throwing")
+    void checkFontAvailability_missingFonts_doesNotThrow() {
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
+        // Fonts are not on the test classpath — method must log a warning, not throw.
+        assertThatCode(() -> gen.checkFontAvailability()).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("PdfGenerationException(String) 1-arg constructor carries the message")
     void pdfGenerationException_messageOnlyConstructor_hasMessage() {
         var ex = new FopInvoicePdfGenerator.PdfGenerationException("FOP failed");

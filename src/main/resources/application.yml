@@ -73,7 +73,7 @@ app:
     max-json-size-bytes: ${INVOICE_MAX_JSON_SIZE_BYTES:1048576}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
-    read-timeout: ${REST_CLIENT_READ_TIMEOUT:10000}
+    read-timeout: ${REST_CLIENT_READ_TIMEOUT:10000}  # Increase to 30000+ ms in production for large signed XML
     allowed-hosts: ${REST_CLIENT_ALLOWED_HOSTS:localhost}
 
 # Eureka client configuration

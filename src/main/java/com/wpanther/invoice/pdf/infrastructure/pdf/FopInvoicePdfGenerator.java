@@ -10,9 +10,12 @@ import org.apache.fop.apps.Fop;
 import org.apache.fop.apps.FopFactory;
 import org.apache.fop.apps.MimeConstants;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import javax.xml.transform.Templates;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
@@ -103,6 +106,33 @@ public class FopInvoicePdfGenerator {
         }
         log.warn("FOP config not found at {}, using default configuration", FOP_CONFIG_PATH);
         return FopFactory.newInstance(new File(".").toURI());
+    }
+
+    private static final List<String> REQUIRED_FONTS = List.of(
+            "fonts/THSarabunNew.ttf",
+            "fonts/THSarabunNew-Bold.ttf",
+            "fonts/THSarabunNew-Italic.ttf",
+            "fonts/THSarabunNew-BoldItalic.ttf",
+            "fonts/NotoSansThai-Regular.ttf",
+            "fonts/NotoSansThai-Bold.ttf"
+    );
+
+    /**
+     * Verify that required Thai font files are present on the classpath.
+     * Runs after the application context is fully started so the warning appears
+     * in the log before the service begins accepting Kafka messages.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void checkFontAvailability() {
+        List<String> missing = REQUIRED_FONTS.stream()
+                .filter(font -> !new ClassPathResource(font).exists())
+                .toList();
+        if (!missing.isEmpty()) {
+            log.warn("Thai font files not found on classpath: {} — Thai text may not render correctly in generated PDFs. "
+                    + "Add the font files to src/main/resources/fonts/ and update fop.xconf.", missing);
+        } else {
+            log.info("Font check: all {} required Thai font files present on classpath.", REQUIRED_FONTS.size());
+        }
     }
 
     /**

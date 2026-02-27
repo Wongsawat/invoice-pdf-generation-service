@@ -120,4 +120,29 @@ class MinioStorageAdapterTest {
 
         assertThat(url).isEqualTo("http://localhost:9001/test-invoices/" + key);
     }
+
+    @Test
+    @DisplayName("resolveUrl() strips leading slash from key to avoid double slash")
+    void resolveUrl_keyWithLeadingSlash_noDoubleSlash() {
+        String key = "/2024/01/15/invoice-INV_001-uuid.pdf";
+
+        String url = adapter.resolveUrl(key);
+
+        assertThat(url).isEqualTo("http://localhost:9001/test-invoices/2024/01/15/invoice-INV_001-uuid.pdf");
+        assertThat(url).doesNotContain("//2024");
+    }
+
+    @Test
+    @DisplayName("resolveUrl() strips trailing slash from baseUrl to avoid double slash")
+    void resolveUrl_baseUrlWithTrailingSlash_noDoubleSlash() {
+        MinioStorageAdapter adapterWithSlash = new MinioStorageAdapter(
+                s3Client, "test-invoices", "http://localhost:9001/test-invoices/",
+                new SimpleMeterRegistry());
+        String key = "2024/01/15/invoice-INV_001-uuid.pdf";
+
+        String url = adapterWithSlash.resolveUrl(key);
+
+        assertThat(url).isEqualTo("http://localhost:9001/test-invoices/" + key);
+        assertThat(url).doesNotContain("//2024");
+    }
 }
