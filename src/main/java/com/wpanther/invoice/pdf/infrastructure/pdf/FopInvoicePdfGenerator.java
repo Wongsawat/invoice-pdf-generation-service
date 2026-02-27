@@ -10,8 +10,6 @@ import org.apache.fop.apps.Fop;
 import org.apache.fop.apps.FopFactory;
 import org.apache.fop.apps.MimeConstants;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -90,6 +88,7 @@ public class FopInvoicePdfGenerator {
 
             log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={} maxPdfSizeBytes={} (each FOP render ~50–200 MB heap)",
                     maxConcurrentRenders, maxPdfSizeBytes);
+            checkFontAvailability();
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize FOP PDF generator", e);
         }
@@ -109,20 +108,15 @@ public class FopInvoicePdfGenerator {
     }
 
     private static final List<String> REQUIRED_FONTS = List.of(
-            "fonts/THSarabunNew.ttf",
-            "fonts/THSarabunNew-Bold.ttf",
-            "fonts/THSarabunNew-Italic.ttf",
-            "fonts/THSarabunNew-BoldItalic.ttf",
-            "fonts/NotoSansThai-Regular.ttf",
-            "fonts/NotoSansThai-Bold.ttf"
+            "fonts/NotoSansThaiLooped-Regular.ttf",
+            "fonts/NotoSansThaiLooped-Bold.ttf"
     );
 
     /**
      * Verify that required Thai font files are present on the classpath.
-     * Runs after the application context is fully started so the warning appears
-     * in the log before the service begins accepting Kafka messages.
+     * Called from the constructor so a warning appears at startup before
+     * the service begins accepting Kafka messages.
      */
-    @EventListener(ApplicationReadyEvent.class)
     public void checkFontAvailability() {
         List<String> missing = REQUIRED_FONTS.stream()
                 .filter(font -> !new ClassPathResource(font).exists())

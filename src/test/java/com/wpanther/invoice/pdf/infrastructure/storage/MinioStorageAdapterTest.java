@@ -133,6 +133,15 @@ class MinioStorageAdapterTest {
     }
 
     @Test
+    @DisplayName("Constructor rejects a non-absolute baseUrl with IllegalStateException")
+    void constructor_invalidBaseUrl_throwsIllegalStateException() {
+        assertThatThrownBy(() -> new MinioStorageAdapter(
+                s3Client, "test-invoices", "not-a-url", new SimpleMeterRegistry()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("app.minio.base-url");
+    }
+
+    @Test
     @DisplayName("resolveUrl() strips trailing slash from baseUrl to avoid double slash")
     void resolveUrl_baseUrlWithTrailingSlash_noDoubleSlash() {
         MinioStorageAdapter adapterWithSlash = new MinioStorageAdapter(

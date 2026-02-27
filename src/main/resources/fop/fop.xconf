@@ -44,27 +44,12 @@
                 <!-- Custom fonts directory in application -->
                 <directory recursive="true">fonts</directory>
 
-                <!-- Thai font configuration -->
-                <!-- THSarabunNew - commonly used Thai font -->
-                <font kerning="yes" embed-url="fonts/THSarabunNew.ttf">
-                    <font-triplet name="THSarabunNew" style="normal" weight="normal"/>
+                <!-- Thai font: Noto Sans Thai Looped -->
+                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Regular.ttf">
+                    <font-triplet name="NotoSansThaiLooped" style="normal" weight="normal"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/THSarabunNew-Bold.ttf">
-                    <font-triplet name="THSarabunNew" style="normal" weight="bold"/>
-                </font>
-                <font kerning="yes" embed-url="fonts/THSarabunNew-Italic.ttf">
-                    <font-triplet name="THSarabunNew" style="italic" weight="normal"/>
-                </font>
-                <font kerning="yes" embed-url="fonts/THSarabunNew-BoldItalic.ttf">
-                    <font-triplet name="THSarabunNew" style="italic" weight="bold"/>
-                </font>
-
-                <!-- Noto Sans Thai - Google font with Thai support -->
-                <font kerning="yes" embed-url="fonts/NotoSansThai-Regular.ttf">
-                    <font-triplet name="NotoSansThai" style="normal" weight="normal"/>
-                </font>
-                <font kerning="yes" embed-url="fonts/NotoSansThai-Bold.ttf">
-                    <font-triplet name="NotoSansThai" style="normal" weight="bold"/>
+                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Bold.ttf">
+                    <font-triplet name="NotoSansThaiLooped" style="normal" weight="bold"/>
                 </font>
             </fonts>
         </renderer>

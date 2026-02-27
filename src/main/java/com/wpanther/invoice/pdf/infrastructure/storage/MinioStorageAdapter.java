@@ -12,6 +12,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -33,6 +34,14 @@ public class MinioStorageAdapter implements PdfStoragePort {
                                @Value("${app.minio.bucket-name}") String bucketName,
                                @Value("${app.minio.base-url}") String baseUrl,
                                MeterRegistry meterRegistry) {
+        try {
+            URI uri = URI.create(baseUrl);
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                throw new IllegalArgumentException("not an absolute URL");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("app.minio.base-url is not a valid absolute URL: " + baseUrl, e);
+        }
         this.s3Client    = s3Client;
         this.bucketName  = bucketName;
         this.baseUrl     = baseUrl;
