@@ -190,6 +190,53 @@ class SagaCommandHandlerTest {
     }
 
     // -------------------------------------------------------------------------
+    // Stuck GENERATING state (TX2 rolled back)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Stuck GENERATING (TX2 rolled back), retries below max → deleteById + beginGeneration + retry")
+    void handleProcessCommand_stuckGenerating_retriesNotExceeded() throws Exception {
+        byte[] pdfBytes = new byte[1000];
+        UUID stuckId = UUID.randomUUID();
+        InvoicePdfDocument stuck = InvoicePdfDocument.builder()
+                .id(stuckId).invoiceId("inv-001").invoiceNumber("INV-2024-001")
+                .status(GenerationStatus.GENERATING).retryCount(1).build();
+        InvoicePdfDocument newDoc = generatingDoc();
+
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(stuck));
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
+        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
+        when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
+        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(newDoc);
+
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfDocumentService).deleteById(stuckId);
+        verify(pdfDocumentService).beginGeneration("inv-001", "INV-2024-001");
+        // previousRetryCount carried forward from the stuck document (retryCount = 1)
+        verify(pdfDocumentService).completeGenerationAndPublish(
+                eq(newDoc.getId()), any(), any(), anyLong(), eq(1), any());
+        verify(pdfDocumentService, never()).publishRetryExhausted(any());
+    }
+
+    @Test
+    @DisplayName("Stuck GENERATING with max retries exceeded → publishRetryExhausted, no generation")
+    void handleProcessCommand_stuckGenerating_maxRetriesExceeded() {
+        InvoicePdfDocument stuck = InvoicePdfDocument.builder()
+                .id(UUID.randomUUID()).invoiceId("inv-001").invoiceNumber("INV-2024-001")
+                .status(GenerationStatus.GENERATING).retryCount(3).build();
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(stuck));
+
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfDocumentService).publishRetryExhausted(any());
+        verify(pdfDocumentService, never()).deleteById(any());
+        verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
+        verifyNoInteractions(signedXmlFetchPort);
+    }
+
+    // -------------------------------------------------------------------------
     // Failure paths
     // -------------------------------------------------------------------------
 

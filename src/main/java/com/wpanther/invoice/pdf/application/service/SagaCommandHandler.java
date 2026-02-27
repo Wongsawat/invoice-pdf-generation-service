@@ -88,15 +88,24 @@ public class SagaCommandHandler {
                     return;
                 }
 
-                // Retry limit check
-                if (existing.isPresent() && existing.get().isFailed()) {
-                    InvoicePdfDocument failed = existing.get();
-                    if (failed.isMaxRetriesExceeded(maxRetries)) {
+                // Retry limit check — handles FAILED and stuck GENERATING states.
+                // A document can be left in GENERATING when TX2 (completeGenerationAndPublish /
+                // failGenerationAndPublish) rolls back.  Without this branch the next re-delivery
+                // would fall through to beginGeneration() and hit the unique invoice_id constraint.
+                if (existing.isPresent()) {
+                    InvoicePdfDocument prior = existing.get();
+                    if (!prior.isFailed()) {
+                        // Document is stuck in a non-terminal state — TX2 likely rolled back.
+                        log.warn("Found document in non-terminal state (status={}) for invoice {} saga {} — "
+                                + "TX2 may have rolled back; will delete and retry",
+                                prior.getStatus(), command.getInvoiceId(), command.getSagaId());
+                    }
+                    if (prior.isMaxRetriesExceeded(maxRetries)) {
                         pdfDocumentService.publishRetryExhausted(command);
                         return;
                     }
-                    // Delete the failed record; flush enforces DELETE-before-INSERT ordering
-                    pdfDocumentService.deleteById(failed.getId());
+                    // Delete the prior record; flush enforces DELETE-before-INSERT ordering
+                    pdfDocumentService.deleteById(prior.getId());
                 }
 
                 // Validate signed XML URL
