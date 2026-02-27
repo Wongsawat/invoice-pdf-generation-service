@@ -134,7 +134,8 @@ class InvoicePdfGenerationServiceImplTest {
         String jsonWithSpecialChars = """
                 {
                   "invoiceNumber": "INV-001",
-                  "seller": { "name": "A & B <Co> 'Ltd'" }
+                  "seller": { "name": "A & B <Co> 'Ltd'" },
+                  "buyer":  { "name": "Buyer Co" }
                 }
                 """;
         when(fopGenerator.generatePdf(anyString())).thenReturn(BASE_PDF);
@@ -156,14 +157,36 @@ class InvoicePdfGenerationServiceImplTest {
     }
 
     @Test
-    @DisplayName("Empty JSON object → no exception; FOP is still called")
-    void generatePdf_emptyJson_noException() throws Exception {
-        when(fopGenerator.generatePdf(anyString())).thenReturn(BASE_PDF);
-        when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any())).thenReturn(PDFA3_BYTES);
+    @DisplayName("Empty JSON object missing seller → InvoicePdfGenerationException before FOP")
+    void generatePdf_emptyJson_missingSellerThrowsException() {
+        assertThatThrownBy(() -> service.generatePdf(INVOICE_NUMBER, SIGNED_XML, "{}"))
+                .isInstanceOf(InvoicePdfGenerationException.class)
+                .hasMessageContaining("seller");
+        verifyNoInteractions(fopGenerator, pdfA3Converter);
+    }
 
-        assertThatCode(() -> service.generatePdf(INVOICE_NUMBER, SIGNED_XML, "{}"))
-                .doesNotThrowAnyException();
-        verify(fopGenerator).generatePdf(anyString());
+    @Test
+    @DisplayName("JSON with seller but missing buyer → InvoicePdfGenerationException before FOP")
+    void generatePdf_missingBuyer_throwsException() {
+        String jsonNobuyer = """
+                {"seller": {"name": "Seller Co"}}
+                """;
+        assertThatThrownBy(() -> service.generatePdf(INVOICE_NUMBER, SIGNED_XML, jsonNobuyer))
+                .isInstanceOf(InvoicePdfGenerationException.class)
+                .hasMessageContaining("buyer");
+        verifyNoInteractions(fopGenerator, pdfA3Converter);
+    }
+
+    @Test
+    @DisplayName("JSON with null seller → InvoicePdfGenerationException before FOP")
+    void generatePdf_nullSeller_throwsException() {
+        String jsonNullSeller = """
+                {"seller": null, "buyer": {"name": "Buyer Co"}}
+                """;
+        assertThatThrownBy(() -> service.generatePdf(INVOICE_NUMBER, SIGNED_XML, jsonNullSeller))
+                .isInstanceOf(InvoicePdfGenerationException.class)
+                .hasMessageContaining("seller");
+        verifyNoInteractions(fopGenerator, pdfA3Converter);
     }
 
     // -------------------------------------------------------------------------
@@ -252,6 +275,7 @@ class InvoicePdfGenerationServiceImplTest {
                 {
                   "invoiceNumber": "INV-2024-002",
                   "seller": { "name": "Seller Co" },
+                  "buyer":  { "name": "Buyer Co" },
                   "paymentInfo": {
                     "method": "Bank Transfer",
                     "bankName": "Bangkok Bank",

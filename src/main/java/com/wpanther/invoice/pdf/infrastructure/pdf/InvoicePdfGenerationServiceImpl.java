@@ -134,6 +134,19 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
         try {
             JsonNode root = objectMapper.readTree(invoiceDataJson);
 
+            // Validate that the two required party fields are present.
+            // Without them the generated PDF contains no business-identifying information.
+            JsonNode sellerNode = root.path("seller");
+            if (sellerNode.isMissingNode() || sellerNode.isNull()) {
+                throw new InvoicePdfGenerationException(
+                        "invoiceDataJson is missing required field 'seller' for invoice: " + invoiceNumber);
+            }
+            JsonNode buyerNode = root.path("buyer");
+            if (buyerNode.isMissingNode() || buyerNode.isNull()) {
+                throw new InvoicePdfGenerationException(
+                        "invoiceDataJson is missing required field 'buyer' for invoice: " + invoiceNumber);
+            }
+
             writer.writeStartDocument("UTF-8", "1.0");
             writer.writeStartElement("invoice");
 

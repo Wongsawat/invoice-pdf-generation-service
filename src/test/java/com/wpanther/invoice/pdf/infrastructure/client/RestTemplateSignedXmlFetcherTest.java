@@ -23,6 +23,20 @@ class RestTemplateSignedXmlFetcherTest {
     private RestTemplate restTemplate;
 
     @Test
+    void constructor_emptyAllowedHosts_throwsIllegalStateException() {
+        assertThatThrownBy(() -> new RestTemplateSignedXmlFetcher(restTemplate, ""))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("allowed-hosts is empty");
+    }
+
+    @Test
+    void constructor_whitespaceOnlyAllowedHosts_throwsIllegalStateException() {
+        assertThatThrownBy(() -> new RestTemplateSignedXmlFetcher(restTemplate, "  ,  ,  "))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("allowed-hosts is empty");
+    }
+
+    @Test
     void fetch_allowedHost_succeeds() {
         var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
         String url = "http://localhost:9000/invoices/signed.xml";

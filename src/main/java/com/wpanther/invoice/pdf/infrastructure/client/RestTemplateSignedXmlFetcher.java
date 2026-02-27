@@ -43,7 +43,13 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
         this.allowedHosts = Arrays.stream(allowedHostsConfig.split(","))
                 .map(String::trim)
                 .map(String::toLowerCase)
+                .filter(s -> !s.isEmpty())
                 .collect(Collectors.toUnmodifiableSet());
+        if (this.allowedHosts.isEmpty()) {
+            throw new IllegalStateException(
+                    "app.rest-client.allowed-hosts is empty — at least one trusted host is required. "
+                    + "Set the REST_CLIENT_ALLOWED_HOSTS environment variable.");
+        }
     }
 
     @Override
