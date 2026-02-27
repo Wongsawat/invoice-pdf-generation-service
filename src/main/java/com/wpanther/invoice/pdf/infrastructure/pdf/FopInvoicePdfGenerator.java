@@ -21,7 +21,6 @@ import javax.xml.transform.sax.SAXResult;
 import javax.xml.transform.stream.StreamSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -99,12 +98,19 @@ public class FopInvoicePdfGenerator {
         if (configResource.exists()) {
             // Config file is present — fail fast if it is malformed rather than silently
             // falling back to FOP defaults (which would produce PDFs with wrong fonts).
+            //
+            // Derive the base URI from the config file's classpath URL (e.g.
+            // jar:file:///app.jar!/BOOT-INF/classes/fop/fop.xconf → …/fop/).
+            // Resolving "." gives the containing directory so relative paths in
+            // fop.xconf (e.g. "../fonts/…") resolve against the classpath, not
+            // the JVM working directory, in both exploded and fat-JAR deployments.
+            URI baseUri = configResource.getURL().toURI().resolve(".");
             try (InputStream configStream = configResource.getInputStream()) {
-                return FopFactory.newInstance(new File(".").toURI(), configStream);
+                return FopFactory.newInstance(baseUri, configStream);
             }
         }
         log.warn("FOP config not found at {}, using default configuration", FOP_CONFIG_PATH);
-        return FopFactory.newInstance(new File(".").toURI());
+        return FopFactory.newInstance(URI.create("."));
     }
 
     private static final List<String> REQUIRED_FONTS = List.of(

@@ -41,14 +41,17 @@
                 <!-- Windows fonts (if running on Windows) -->
                 <directory recursive="true">C:\Windows\Fonts</directory>
 
-                <!-- Custom fonts directory in application -->
-                <directory recursive="true">fonts</directory>
+                <!-- Custom fonts directory in application.
+                     Paths are relative to this file's directory (classpath:fop/).
+                     "../fonts" resolves to classpath:fonts/, which is where the
+                     font TTF files are packaged in the JAR. -->
+                <directory recursive="true">../fonts</directory>
 
                 <!-- Thai font: Noto Sans Thai Looped -->
-                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Regular.ttf">
+                <font kerning="yes" embed-url="../fonts/NotoSansThaiLooped-Regular.ttf">
                     <font-triplet name="NotoSansThaiLooped" style="normal" weight="normal"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Bold.ttf">
+                <font kerning="yes" embed-url="../fonts/NotoSansThaiLooped-Bold.ttf">
                     <font-triplet name="NotoSansThaiLooped" style="normal" weight="bold"/>
                 </font>
             </fonts>
