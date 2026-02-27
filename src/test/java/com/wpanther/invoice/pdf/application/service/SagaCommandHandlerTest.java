@@ -420,6 +420,30 @@ class SagaCommandHandlerTest {
     }
 
     // -------------------------------------------------------------------------
+    // Circuit-breaker-open path
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("MinIO circuit breaker OPEN on upload → failGenerationAndPublish, delete NOT called")
+    void handleProcessCommand_circuitBreakerOpen_failsWithoutDelete() throws Exception {
+        InvoicePdfDocument doc = generatingDoc();
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
+        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
+                .thenReturn(new byte[]{1, 2, 3});
+        when(pdfStoragePort.store(anyString(), any()))
+                .thenThrow(CallNotPermittedException.createCallNotPermittedException(
+                        CircuitBreaker.ofDefaults("minio")));
+
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfDocumentService).failGenerationAndPublish(
+                eq(doc.getId()), contains("circuit breaker"), anyInt(), any());
+        verify(pdfStoragePort, never()).delete(anyString());
+    }
+
+    // -------------------------------------------------------------------------
     // publishOrchestrationFailure (fully-parsed process command → DLQ)
     // -------------------------------------------------------------------------
 

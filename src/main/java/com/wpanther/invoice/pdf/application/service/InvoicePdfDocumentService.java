@@ -95,17 +95,18 @@ public class InvoicePdfDocumentService {
     @Transactional
     public void failGenerationAndPublish(UUID documentId, String errorMessage,
                                          int previousRetryCount, ProcessInvoicePdfCommand command) {
+        // Normalise once — both the persisted field and the saga reply use the same value.
+        String safeError = errorMessage != null ? errorMessage : "PDF generation failed";
         InvoicePdfDocument doc = requireDocument(documentId);
-        doc.markFailed(errorMessage, LocalDateTime.now());
+        doc.markFailed(safeError, LocalDateTime.now());
         applyRetryCount(doc, previousRetryCount);
         repository.save(doc);
 
         sagaReplyPort.publishFailure(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                errorMessage != null ? errorMessage : "PDF generation failed");
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), safeError);
 
         log.warn("PDF generation failed for saga {} invoice {}: {}",
-                command.getSagaId(), doc.getInvoiceNumber(), errorMessage);
+                command.getSagaId(), doc.getInvoiceNumber(), safeError);
     }
 
     /**
@@ -172,8 +173,11 @@ public class InvoicePdfDocumentService {
 
     private InvoicePdfDocument requireDocument(UUID documentId) {
         return repository.findById(documentId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "InvoicePdfDocument not found: " + documentId));
+                .orElseThrow(() -> {
+                    // Log the UUID for internal diagnosis; do not forward it to callers.
+                    log.error("InvoicePdfDocument not found for id={} — TX2 may have raced with compensation", documentId);
+                    return new IllegalStateException("Expected invoice PDF document is absent — internal state error");
+                });
     }
 
     private void applyRetryCount(InvoicePdfDocument doc, int previousRetryCount) {

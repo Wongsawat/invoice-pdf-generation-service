@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -224,6 +225,31 @@ class InvoicePdfDocumentServiceTest {
 
         verify(sagaReplyPort).publishFailure(eq("saga-001"), any(), eq("corr-456"),
                 eq("Compensation failed: S3 error"));
+    }
+
+    @Test
+    @DisplayName("completeGenerationAndPublish() throws IllegalStateException when document not found")
+    void completeGenerationAndPublish_documentNotFound_throwsIllegalStateException() {
+        when(repository.findById(DOC_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                service.completeGenerationAndPublish(DOC_ID, S3_KEY, FILE_URL, 1000L, -1, processCommand()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("internal state error");
+    }
+
+    @Test
+    @DisplayName("failGenerationAndPublish() uses fallback message when errorMessage is null")
+    void failGenerationAndPublish_nullErrorMessage_usesFallback() {
+        InvoicePdfDocument doc = generatingDoc();
+        when(repository.findById(DOC_ID)).thenReturn(Optional.of(doc));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.failGenerationAndPublish(DOC_ID, null, -1, processCommand());
+
+        assertThat(doc.getErrorMessage()).isEqualTo("PDF generation failed");
+        verify(sagaReplyPort).publishFailure(eq("saga-001"), any(), eq("corr-456"),
+                eq("PDF generation failed"));
     }
 
     // -------------------------------------------------------------------------

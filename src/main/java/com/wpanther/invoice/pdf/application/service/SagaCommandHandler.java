@@ -94,9 +94,15 @@ public class SagaCommandHandler {
                             command, "invoiceNumber is null or blank in saga command");
                     return;
                 }
+                String invoiceId = command.getInvoiceId();
+                if (invoiceId == null || invoiceId.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(
+                            command, "invoiceId is null or blank in saga command");
+                    return;
+                }
 
                 Optional<InvoicePdfDocument> existing =
-                        pdfDocumentService.findByInvoiceId(command.getInvoiceId());
+                        pdfDocumentService.findByInvoiceId(invoiceId);
 
                 // Idempotency: already completed — re-publish and reply SUCCESS
                 if (existing.isPresent() && existing.get().isCompleted()) {
@@ -126,7 +132,7 @@ public class SagaCommandHandler {
 
                 // ── Short tx 1: create PENDING → GENERATING record ──────────────────
                 InvoicePdfDocument document = pdfDocumentService.beginGeneration(
-                        command.getInvoiceId(), invoiceNumber);
+                        invoiceId, invoiceNumber);
                 int previousRetryCount =
                         existing.map(InvoicePdfDocument::getRetryCount).orElse(-1);
                 // ── Transaction committed ────────────────────────────────────────────
