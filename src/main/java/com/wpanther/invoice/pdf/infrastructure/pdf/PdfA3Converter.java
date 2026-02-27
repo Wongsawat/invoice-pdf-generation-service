@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
@@ -204,8 +205,12 @@ public class PdfA3Converter {
         }
         nameDictionary.setEmbeddedFiles(embeddedFilesTree);
 
-        // Add to AF array (Associated Files - PDF/A-3 requirement)
-        catalog.getCOSObject().setItem(COSName.getPDFName("AF"), fileSpec);
+        // Add to AF array (Associated Files - PDF/A-3 requirement).
+        // ISO 19005-3 §6.9 requires the AF key to be an array of file specification
+        // dictionaries, not a single dictionary — a single object fails veraPDF validation.
+        COSArray afArray = new COSArray();
+        afArray.add(fileSpec);
+        catalog.getCOSObject().setItem(COSName.getPDFName("AF"), afArray);
 
         log.debug("Embedded XML file: {} ({} bytes)", xmlFilename, xmlBytes.length);
     }

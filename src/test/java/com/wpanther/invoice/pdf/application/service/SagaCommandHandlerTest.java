@@ -261,7 +261,6 @@ class SagaCommandHandlerTest {
         ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
                 "doc-123", "inv-001", "   ", SIGNED_XML_URL, "{}");
-        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
 
         sagaCommandHandler.handleProcessCommand(cmd);
 
@@ -276,7 +275,6 @@ class SagaCommandHandlerTest {
         ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
                 "doc-123", "inv-001", "INV-2024-001", "  ", "{}");
-        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
 
         sagaCommandHandler.handleProcessCommand(cmd);
 
@@ -419,5 +417,49 @@ class SagaCommandHandlerTest {
 
         verify(pdfDocumentService).publishCompensationFailure(any(), contains("Compensation failed"));
         verify(pdfDocumentService, never()).publishCompensated(any());
+    }
+
+    // -------------------------------------------------------------------------
+    // publishOrchestrationFailure (fully-parsed process command → DLQ)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("publishOrchestrationFailure: publishes FAILURE reply citing retry exhaustion")
+    void publishOrchestrationFailure_publishesFailure() {
+        sagaCommandHandler.publishOrchestrationFailure(
+                processCommand(), new RuntimeException("processing blew up"));
+
+        verify(sagaReplyPort).publishFailure(
+                eq("saga-001"), eq(SagaStep.GENERATE_INVOICE_PDF),
+                eq("corr-456"),
+                contains("retry exhaustion"));
+    }
+
+    @Test
+    @DisplayName("publishOrchestrationFailure: swallows port exception so Camel DLQ routing continues")
+    void publishOrchestrationFailure_sagaReplyThrows_doesNotPropagate() {
+        doThrow(new RuntimeException("outbox write failed"))
+                .when(sagaReplyPort).publishFailure(anyString(), any(), anyString(), anyString());
+
+        // Must not propagate — exception is logged; orchestrator falls back to saga timeout
+        sagaCommandHandler.publishOrchestrationFailure(
+                processCommand(), new RuntimeException("cause"));
+        // No assertion needed: propagation would cause a test failure above
+    }
+
+    // -------------------------------------------------------------------------
+    // OptimisticLockingFailureException handling
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("handleProcessCommand: OptimisticLockingFailureException → publishGenerationFailure with concurrent-modification message")
+    void handleProcessCommand_optimisticLockingFailure_publishesFailure() {
+        when(pdfDocumentService.findByInvoiceId("inv-001"))
+                .thenThrow(new OptimisticLockingFailureException("version conflict"));
+
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfDocumentService).publishGenerationFailure(
+                any(), contains("Concurrent modification"));
     }
 }

@@ -80,6 +80,21 @@ public class SagaCommandHandler {
             log.info("Handling ProcessInvoicePdfCommand for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceNumber());
             try {
+                // Validate command fields first — before any DB mutation so a permanently
+                // malformed command never deletes an existing document or bypasses retry limits.
+                String signedXmlUrl = command.getSignedXmlUrl();
+                if (signedXmlUrl == null || signedXmlUrl.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(
+                            command, "signedXmlUrl is null or blank in saga command");
+                    return;
+                }
+                String invoiceNumber = command.getInvoiceNumber();
+                if (invoiceNumber == null || invoiceNumber.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(
+                            command, "invoiceNumber is null or blank in saga command");
+                    return;
+                }
+
                 Optional<InvoicePdfDocument> existing =
                         pdfDocumentService.findByInvoiceId(command.getInvoiceId());
 
@@ -107,22 +122,6 @@ public class SagaCommandHandler {
                     }
                     // Delete the prior record; flush enforces DELETE-before-INSERT ordering
                     pdfDocumentService.deleteById(prior.getId());
-                }
-
-                // Validate signed XML URL
-                String signedXmlUrl = command.getSignedXmlUrl();
-                if (signedXmlUrl == null || signedXmlUrl.isBlank()) {
-                    pdfDocumentService.publishGenerationFailure(
-                            command, "signedXmlUrl is null or blank in saga command");
-                    return;
-                }
-
-                // Validate invoice number
-                String invoiceNumber = command.getInvoiceNumber();
-                if (invoiceNumber == null || invoiceNumber.isBlank()) {
-                    pdfDocumentService.publishGenerationFailure(
-                            command, "invoiceNumber is null or blank in saga command");
-                    return;
                 }
 
                 // ── Short tx 1: create PENDING → GENERATING record ──────────────────
