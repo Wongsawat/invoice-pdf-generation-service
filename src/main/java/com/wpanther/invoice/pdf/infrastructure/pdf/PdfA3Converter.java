@@ -48,7 +48,7 @@ public class PdfA3Converter {
 
     private static final String ICC_PROFILE_PATH = "icc/sRGB.icc";
     private static final String MIME_TYPE_XML = "application/xml";
-    private static final String AFRelationship_SOURCE = "Source";
+    private static final String AF_RELATIONSHIP_SOURCE = "Source";
 
     private final byte[] iccProfileBytes;   // loaded once at startup
     private final Timer conversionTimer;
@@ -187,7 +187,7 @@ public class PdfA3Converter {
         fileSpec.setEmbeddedFileUnicode(embeddedFile);
 
         // Set AFRelationship to "Source" (PDF/A-3 requirement for source data)
-        fileSpec.getCOSObject().setName(COSName.getPDFName("AFRelationship"), AFRelationship_SOURCE);
+        fileSpec.getCOSObject().setName(COSName.getPDFName("AFRelationship"), AF_RELATIONSHIP_SOURCE);
 
         // Add to document's embedded files
         PDEmbeddedFilesNameTreeNode embeddedFilesTree = new PDEmbeddedFilesNameTreeNode();

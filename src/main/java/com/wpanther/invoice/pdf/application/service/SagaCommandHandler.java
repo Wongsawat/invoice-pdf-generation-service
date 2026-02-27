@@ -244,8 +244,8 @@ public class SagaCommandHandler {
     }
 
     /**
-     * Best-effort failure notification when Camel routes a message to the DLQ after
-     * exhausting retries.  Runs in its own transaction (REQUIRES_NEW) so a previously
+     * Best-effort failure notification when Camel routes a <em>process</em> message to the DLQ
+     * after exhausting retries.  Runs in its own transaction (REQUIRES_NEW) so a previously
      * rolled-back outer transaction does not prevent the outbox write.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -259,6 +259,25 @@ public class SagaCommandHandler {
                     command.getSagaId(), command.getInvoiceNumber());
         } catch (Exception e) {
             log.error("Cannot notify orchestrator of DLQ failure for saga {} — orchestrator must timeout",
+                    command.getSagaId(), e);
+        }
+    }
+
+    /**
+     * Best-effort failure notification when Camel routes a <em>compensation</em> message to the
+     * DLQ after exhausting retries.  Runs in its own transaction (REQUIRES_NEW).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void publishCompensationOrchestrationFailure(CompensateInvoicePdfCommand command, Throwable cause) {
+        try {
+            String error = "Compensation message routed to DLQ after retry exhaustion: "
+                    + describeThrowable(cause);
+            sagaReplyPort.publishFailure(
+                    command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
+            log.error("Published FAILURE reply after compensation DLQ routing for saga {} invoice {}",
+                    command.getSagaId(), command.getInvoiceId());
+        } catch (Exception e) {
+            log.error("Cannot notify orchestrator of compensation DLQ failure for saga {} — orchestrator must timeout",
                     command.getSagaId(), e);
         }
     }

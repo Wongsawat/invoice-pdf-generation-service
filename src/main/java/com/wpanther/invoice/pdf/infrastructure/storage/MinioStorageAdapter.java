@@ -75,7 +75,7 @@ public class MinioStorageAdapter implements PdfStoragePort {
 
     @Override
     public String resolveUrl(String key) {
-        return baseUrl + "/" + key;
+        return (baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl) + "/" + key;
     }
 
     private String buildKey(String invoiceNumber) {

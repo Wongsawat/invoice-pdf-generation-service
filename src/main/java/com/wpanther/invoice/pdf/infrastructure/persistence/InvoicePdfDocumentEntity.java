@@ -14,7 +14,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "invoice_pdf_documents", indexes = {
+@Table(name = "invoice_pdf_documents",
+        uniqueConstraints = @UniqueConstraint(name = "uq_invoice_pdf_invoice_id", columnNames = "invoice_id"),
+        indexes = {
     @Index(name = "idx_invoice_pdf_invoice_id", columnList = "invoice_id"),
     @Index(name = "idx_invoice_pdf_invoice_number", columnList = "invoice_number"),
     @Index(name = "idx_invoice_pdf_status", columnList = "status")

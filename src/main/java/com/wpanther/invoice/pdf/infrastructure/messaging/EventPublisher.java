@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,7 +16,6 @@ import java.util.Map;
  * Publishes integration events via outbox pattern for reliable delivery.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class EventPublisher implements PdfEventPort {
 
@@ -26,9 +24,15 @@ public class EventPublisher implements PdfEventPort {
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
+    private final String pdfGeneratedTopic;
 
-    @Value("${app.kafka.topics.pdf-generated}")
-    private String pdfGeneratedTopic;
+    public EventPublisher(OutboxService outboxService,
+                          ObjectMapper objectMapper,
+                          @Value("${app.kafka.topics.pdf-generated}") String pdfGeneratedTopic) {
+        this.outboxService = outboxService;
+        this.objectMapper = objectMapper;
+        this.pdfGeneratedTopic = pdfGeneratedTopic;
+    }
 
     /**
      * Publish PDF generated event to pdf.generated topic (for Notification Service).

@@ -12,6 +12,8 @@ import java.util.UUID;
  */
 public class InvoicePdfDocument {
 
+    private static final String DEFAULT_MIME_TYPE = "application/pdf";
+
     // Identity
     private final UUID id;
 
@@ -49,7 +51,7 @@ public class InvoicePdfDocument {
         this.documentPath = builder.documentPath;
         this.documentUrl = builder.documentUrl;
         this.fileSize = builder.fileSize;
-        this.mimeType = builder.mimeType != null ? builder.mimeType : "application/pdf";
+        this.mimeType = builder.mimeType != null ? builder.mimeType : DEFAULT_MIME_TYPE;
         this.xmlEmbedded = builder.xmlEmbedded;
         this.status = builder.status != null ? builder.status : GenerationStatus.PENDING;
         this.errorMessage = builder.errorMessage;
@@ -87,7 +89,7 @@ public class InvoicePdfDocument {
     /**
      * Mark generation as completed
      */
-    public void markCompleted(String documentPath, String documentUrl, long fileSize) {
+    public void markCompleted(String documentPath, String documentUrl, long fileSize, LocalDateTime completedAt) {
         if (this.status != GenerationStatus.GENERATING) {
             throw new IllegalStateException("Can only complete from GENERATING status");
         }
@@ -103,16 +105,19 @@ public class InvoicePdfDocument {
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.status = GenerationStatus.COMPLETED;
-        this.completedAt = LocalDateTime.now();
+        this.completedAt = completedAt;
     }
 
     /**
      * Mark generation as failed
      */
-    public void markFailed(String errorMessage) {
+    public void markFailed(String errorMessage, LocalDateTime failedAt) {
+        if (this.status == GenerationStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot mark a COMPLETED document as failed");
+        }
         this.status = GenerationStatus.FAILED;
         this.errorMessage = errorMessage;
-        this.completedAt = LocalDateTime.now();
+        this.completedAt = failedAt;
     }
 
     /**
@@ -191,15 +196,10 @@ public class InvoicePdfDocument {
         return this.retryCount >= maxRetries;
     }
 
-    public void incrementRetryCount() {
-        this.retryCount++;
-    }
-
     /**
      * Advance the retry count to {@code target} if it is not already there.
      * Used by the application service when carrying forward the count from a
-     * previous failed attempt without knowing exactly how many times
-     * {@link #incrementRetryCount()} has been called.
+     * previous failed attempt.
      */
     public void incrementRetryCountTo(int target) {
         if (this.retryCount < target) {

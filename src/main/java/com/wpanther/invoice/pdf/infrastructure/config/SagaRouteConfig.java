@@ -57,6 +57,10 @@ public class SagaRouteConfig extends RouteBuilder {
                                 log.error("DLQ: notifying orchestrator of retry exhaustion for saga {} invoice {}",
                                         cmd.getSagaId(), cmd.getInvoiceNumber());
                                 sagaCommandHandler.publishOrchestrationFailure(cmd, cause);
+                            } else if (body instanceof CompensateInvoicePdfCommand compensateCmd) {
+                                log.error("DLQ: notifying orchestrator of compensation retry exhaustion for saga {} invoice {}",
+                                        compensateCmd.getSagaId(), compensateCmd.getInvoiceId());
+                                sagaCommandHandler.publishCompensationOrchestrationFailure(compensateCmd, cause);
                             } else {
                                 log.error("DLQ: cannot notify orchestrator — body not deserialized ({})",
                                         body == null ? "null" : body.getClass().getSimpleName());

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -74,7 +75,7 @@ public class InvoicePdfDocumentService {
                                              long fileSize, int previousRetryCount,
                                              ProcessInvoicePdfCommand command) {
         InvoicePdfDocument doc = requireDocument(documentId);
-        doc.markCompleted(s3Key, fileUrl, fileSize);
+        doc.markCompleted(s3Key, fileUrl, fileSize, LocalDateTime.now());
         doc.markXmlEmbedded();
         applyRetryCount(doc, previousRetryCount);
         doc = repository.save(doc);
@@ -95,7 +96,7 @@ public class InvoicePdfDocumentService {
     public void failGenerationAndPublish(UUID documentId, String errorMessage,
                                          int previousRetryCount, ProcessInvoicePdfCommand command) {
         InvoicePdfDocument doc = requireDocument(documentId);
-        doc.markFailed(errorMessage);
+        doc.markFailed(errorMessage, LocalDateTime.now());
         applyRetryCount(doc, previousRetryCount);
         repository.save(doc);
 

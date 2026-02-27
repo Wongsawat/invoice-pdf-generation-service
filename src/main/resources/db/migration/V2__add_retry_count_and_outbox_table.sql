@@ -1,5 +1,5 @@
 -- Add retry_count column to invoice_pdf_documents table
-ALTER TABLE invoice_pdf_documents ADD COLUMN retry_count INTEGER DEFAULT 0;
+ALTER TABLE invoice_pdf_documents ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
 
 -- Create outbox_events table for transactional outbox pattern
 CREATE TABLE outbox_events (

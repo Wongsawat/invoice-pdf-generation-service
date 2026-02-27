@@ -3,6 +3,8 @@ package com.wpanther.invoice.pdf.domain.model;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.*;
 
 @DisplayName("InvoicePdfDocument Aggregate Tests")
@@ -72,7 +74,7 @@ class InvoicePdfDocumentTest {
     void testMarkCompleted() {
         InvoicePdfDocument doc = pendingDocument();
         doc.startGeneration();
-        doc.markCompleted("2024/01/15/test.pdf", "http://minio/test.pdf", 12345L);
+        doc.markCompleted("2024/01/15/test.pdf", "http://minio/test.pdf", 12345L, LocalDateTime.now());
 
         assertThat(doc.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
         assertThat(doc.getDocumentPath()).isEqualTo("2024/01/15/test.pdf");
@@ -84,10 +86,10 @@ class InvoicePdfDocumentTest {
     }
 
     @Test
-    @DisplayName("Any state → markFailed() → FAILED")
+    @DisplayName("PENDING → markFailed() → FAILED")
     void testMarkFailed_FromPending() {
         InvoicePdfDocument doc = pendingDocument();
-        doc.markFailed("Something went wrong");
+        doc.markFailed("Something went wrong", LocalDateTime.now());
 
         assertThat(doc.getStatus()).isEqualTo(GenerationStatus.FAILED);
         assertThat(doc.getErrorMessage()).isEqualTo("Something went wrong");
@@ -101,7 +103,7 @@ class InvoicePdfDocumentTest {
     void testMarkFailed_FromGenerating() {
         InvoicePdfDocument doc = pendingDocument();
         doc.startGeneration();
-        doc.markFailed("FOP transform failed");
+        doc.markFailed("FOP transform failed", LocalDateTime.now());
 
         assertThat(doc.isFailed()).isTrue();
         assertThat(doc.getErrorMessage()).isEqualTo("FOP transform failed");
@@ -136,7 +138,7 @@ class InvoicePdfDocumentTest {
     void testMarkCompleted_FromPending() {
         InvoicePdfDocument doc = pendingDocument();
 
-        assertThatThrownBy(() -> doc.markCompleted("path", "url", 100L))
+        assertThatThrownBy(() -> doc.markCompleted("path", "url", 100L, LocalDateTime.now()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("GENERATING");
     }
@@ -147,7 +149,7 @@ class InvoicePdfDocumentTest {
         InvoicePdfDocument doc = pendingDocument();
         doc.startGeneration();
 
-        assertThatThrownBy(() -> doc.markCompleted("path", "url", 0L))
+        assertThatThrownBy(() -> doc.markCompleted("path", "url", 0L, LocalDateTime.now()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("File size must be positive");
     }
@@ -158,24 +160,25 @@ class InvoicePdfDocumentTest {
         InvoicePdfDocument doc = pendingDocument();
         doc.startGeneration();
 
-        assertThatThrownBy(() -> doc.markCompleted(null, "url", 100L))
+        assertThatThrownBy(() -> doc.markCompleted(null, "url", 100L, LocalDateTime.now()))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("markFailed() from COMPLETED throws IllegalStateException")
+    void testMarkFailed_FromCompleted_ThrowsIllegalStateException() {
+        InvoicePdfDocument doc = pendingDocument();
+        doc.startGeneration();
+        doc.markCompleted("path", "url", 100L, LocalDateTime.now());
+
+        assertThatThrownBy(() -> doc.markFailed("late failure", LocalDateTime.now()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("COMPLETED");
     }
 
     // -------------------------------------------------------------------------
     // Retry tracking
     // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("incrementRetryCount() increases count by one")
-    void testIncrementRetryCount() {
-        InvoicePdfDocument doc = pendingDocument();
-        assertThat(doc.getRetryCount()).isZero();
-        doc.incrementRetryCount();
-        assertThat(doc.getRetryCount()).isOne();
-        doc.incrementRetryCount();
-        assertThat(doc.getRetryCount()).isEqualTo(2);
-    }
 
     @Test
     @DisplayName("incrementRetryCountTo() advances count to target")

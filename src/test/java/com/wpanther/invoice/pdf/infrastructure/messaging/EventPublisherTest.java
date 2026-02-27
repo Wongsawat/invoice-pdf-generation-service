@@ -10,8 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,8 +26,7 @@ class EventPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new EventPublisher(outboxService, new ObjectMapper());
-        ReflectionTestUtils.setField(publisher, "pdfGeneratedTopic", "pdf.generated.invoice");
+        publisher = new EventPublisher(outboxService, new ObjectMapper(), "pdf.generated.invoice");
     }
 
     private InvoicePdfGeneratedEvent buildEvent() {

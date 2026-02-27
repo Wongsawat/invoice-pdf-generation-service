@@ -16,7 +16,7 @@ public class OutboxConfig {
     @Value("${app.rest-client.connect-timeout:5000}")
     private int connectTimeout;
 
-    @Value("${app.rest-client.read-timeout:30000}")
+    @Value("${app.rest-client.read-timeout:10000}")
     private int readTimeout;
 
     @Bean
