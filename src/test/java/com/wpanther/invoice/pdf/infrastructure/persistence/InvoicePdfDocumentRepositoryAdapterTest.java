@@ -117,15 +117,9 @@ class InvoicePdfDocumentRepositoryAdapterTest {
         assertThat(result.getRetryCount()).isEqualTo(1);
     }
 
-    @Test
-    void toDomain_nullFileSize_defaultsToZero() {
-        entity.setFileSize(null);
-        when(jpaRepository.save(any())).thenReturn(entity);
-
-        InvoicePdfDocument result = repository.save(domain);
-
-        assertThat(result.getFileSize()).isZero();
-    }
+    // toDomain_nullFileSize_defaultsToZero intentionally removed:
+    // file_size is NOT NULL in the database (V3 migration), so null values
+    // can no longer come from JPA. The adapter no longer needs null guards.
 
     @Test
     void toDomain_nullXmlEmbedded_defaultsToFalse() {
@@ -137,15 +131,9 @@ class InvoicePdfDocumentRepositoryAdapterTest {
         assertThat(result.isXmlEmbedded()).isFalse();
     }
 
-    @Test
-    void toDomain_nullRetryCount_defaultsToZero() {
-        entity.setRetryCount(null);
-        when(jpaRepository.save(any())).thenReturn(entity);
-
-        InvoicePdfDocument result = repository.save(domain);
-
-        assertThat(result.getRetryCount()).isZero();
-    }
+    // toDomain_nullRetryCount_defaultsToZero intentionally removed:
+    // retry_count is NOT NULL in the database (V3 migration), so null values
+    // can no longer come from JPA. The adapter no longer needs null guards.
 
     // -------------------------------------------------------------------------
     // findById

@@ -377,6 +377,37 @@ class SagaCommandHandlerTest {
         verify(pdfDocumentService).publishCompensated(any());
     }
 
+    // -------------------------------------------------------------------------
+    // publishOrchestrationFailureForUnparsedMessage
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("publishOrchestrationFailureForUnparsedMessage: publishes FAILURE reply describing deserialization error")
+    void publishOrchestrationFailureForUnparsedMessage_publishesFailure() {
+        Throwable cause = new RuntimeException("Unrecognized field: unknownStep");
+
+        sagaCommandHandler.publishOrchestrationFailureForUnparsedMessage(
+                "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456", cause);
+
+        verify(sagaReplyPort).publishFailure(
+                eq("saga-001"), eq(SagaStep.GENERATE_INVOICE_PDF),
+                eq("corr-456"),
+                contains("deserialization failure"));
+    }
+
+    @Test
+    @DisplayName("publishOrchestrationFailureForUnparsedMessage: swallows port exception so Camel DLQ routing continues")
+    void publishOrchestrationFailureForUnparsedMessage_sagaReplyThrows_doesNotPropagate() {
+        doThrow(new RuntimeException("outbox write failed"))
+                .when(sagaReplyPort).publishFailure(anyString(), any(), anyString(), anyString());
+
+        // Must not propagate — exception is logged; orchestrator falls back to saga timeout
+        sagaCommandHandler.publishOrchestrationFailureForUnparsedMessage(
+                "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
+                new RuntimeException("cause"));
+        // No assertion needed: propagation would cause a test failure above
+    }
+
     @Test
     @DisplayName("deleteById throws during compensation → publishCompensationFailure")
     void handleCompensation_dbDeleteFails() {

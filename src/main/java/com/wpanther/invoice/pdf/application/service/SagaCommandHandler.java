@@ -7,6 +7,7 @@ import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
+import com.wpanther.saga.domain.enums.SagaStep;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -270,6 +271,26 @@ public class SagaCommandHandler {
         } catch (Exception e) {
             log.error("Cannot notify orchestrator of DLQ failure for saga {} — orchestrator must timeout",
                     command.getSagaId(), e);
+        }
+    }
+
+    /**
+     * Best-effort failure notification when Camel cannot deserialize a <em>process</em> message
+     * (e.g., malformed JSON or unknown enum value) and routes it to the DLQ.
+     * Accepts raw saga coordinates recovered by the caller from the unparsed JSON payload.
+     * Runs in its own transaction (REQUIRES_NEW).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void publishOrchestrationFailureForUnparsedMessage(
+            String sagaId, SagaStep sagaStep, String correlationId, Throwable cause) {
+        try {
+            String error = "Message routed to DLQ after deserialization failure: "
+                    + describeThrowable(cause);
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, error);
+            log.error("Published FAILURE reply after DLQ routing (deserialization failure) for saga {}", sagaId);
+        } catch (Exception e) {
+            log.error("Cannot notify orchestrator of DLQ deserialization failure for saga {} — orchestrator must timeout",
+                    sagaId, e);
         }
     }
 

@@ -51,7 +51,7 @@ public class InvoicePdfDocumentEntity {
     @Column(name = "document_url", length = COL_LEN_DOC_URL)
     private String documentUrl;
 
-    @Column(name = "file_size")
+    @Column(name = "file_size", nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private Long fileSize;
 
     @Column(name = "mime_type", nullable = false, length = COL_LEN_MIME_TYPE)
@@ -67,7 +67,7 @@ public class InvoicePdfDocumentEntity {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    @Column(name = "retry_count")
+    @Column(name = "retry_count", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
     private Integer retryCount;
 
     @Version

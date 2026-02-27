@@ -1,14 +1,19 @@
 package com.wpanther.invoice.pdf.infrastructure.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.application.service.SagaCommandHandler;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
+import com.wpanther.saga.domain.enums.SagaStep;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
 import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * Apache Camel routes for saga command and compensation consumers.
@@ -30,9 +35,11 @@ import org.springframework.stereotype.Component;
 public class SagaRouteConfig extends RouteBuilder {
 
     private final SagaCommandHandler sagaCommandHandler;
+    private final ObjectMapper objectMapper;
 
-    public SagaRouteConfig(SagaCommandHandler sagaCommandHandler) {
+    public SagaRouteConfig(SagaCommandHandler sagaCommandHandler, ObjectMapper objectMapper) {
         this.sagaCommandHandler = sagaCommandHandler;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -63,8 +70,12 @@ public class SagaRouteConfig extends RouteBuilder {
                                         compensateCmd.getSagaId(), compensateCmd.getInvoiceId());
                                 sagaCommandHandler.publishCompensationOrchestrationFailure(compensateCmd, cause);
                             } else {
-                                log.error("DLQ: cannot notify orchestrator — body not deserialized ({})",
+                                // Body was never deserialized (e.g., malformed JSON, unknown enum).
+                                // Attempt to recover saga coordinates from the raw payload so the
+                                // orchestrator is not left waiting indefinitely for a reply.
+                                log.error("DLQ: body not deserialized ({}); attempting saga metadata recovery",
                                         body == null ? "null" : body.getClass().getSimpleName());
+                                recoverAndNotifyOrchestrator(body, cause);
                             }
                         }));
 
@@ -111,5 +122,43 @@ public class SagaRouteConfig extends RouteBuilder {
                                 sagaCommandHandler.handleCompensation(cmd);
                         })
                         .log("Successfully processed compensation command");
+    }
+
+    /**
+     * Best-effort: parse raw Kafka message body as JSON and extract {@code sagaId},
+     * {@code sagaStep}, and {@code correlationId} so the orchestrator can be notified
+     * of the failure rather than waiting for a saga timeout.
+     *
+     * <p>This is only called when Camel's {@code unmarshal()} step failed (i.e. the body
+     * is still a raw {@code byte[]} or {@code String}), so we parse leniently via
+     * {@link JsonNode} rather than full object deserialization.</p>
+     */
+    private void recoverAndNotifyOrchestrator(Object body, Throwable cause) {
+        if (body == null) {
+            log.error("DLQ: null message body — orchestrator must timeout");
+            return;
+        }
+        try {
+            byte[] rawBytes = body instanceof byte[] b
+                    ? b
+                    : body.toString().getBytes(StandardCharsets.UTF_8);
+            JsonNode node        = objectMapper.readTree(rawBytes);
+            String sagaId        = node.path("sagaId").asText(null);
+            String sagaStepStr   = node.path("sagaStep").asText(null);
+            String correlationId = node.path("correlationId").asText(null);
+
+            if (sagaId == null || sagaStepStr == null) {
+                log.error("DLQ: saga metadata missing in raw message — orchestrator must timeout");
+                return;
+            }
+            // Deserialize SagaStep using the configured ObjectMapper (supports kebab-case codes)
+            SagaStep sagaStep = objectMapper.readValue(
+                    "\"" + sagaStepStr + "\"", SagaStep.class);
+            sagaCommandHandler.publishOrchestrationFailureForUnparsedMessage(
+                    sagaId, sagaStep, correlationId, cause);
+        } catch (Exception parseEx) {
+            log.error("DLQ: cannot parse raw message for saga metadata — orchestrator must timeout: {}",
+                    parseEx.getMessage());
+        }
     }
 }

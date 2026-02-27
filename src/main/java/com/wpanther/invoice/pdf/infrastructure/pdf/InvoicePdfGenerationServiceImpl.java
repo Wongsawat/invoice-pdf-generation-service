@@ -91,6 +91,10 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
         } catch (PdfA3Converter.PdfConversionException e) {
             log.error("PDF/A-3 conversion failed for invoice: {}", invoiceNumber, e);
             throw new InvoicePdfGenerationException("PDF/A-3 conversion failed: " + e.getMessage(), e);
+        } catch (InvoicePdfGenerationException e) {
+            // Already a well-formed InvoicePdfGenerationException (e.g., from
+            // validateXmlWellFormedness) — rethrow directly to avoid double-wrapping.
+            throw e;
         } catch (Exception e) {
             log.error("Unexpected error during PDF generation for invoice: {}", invoiceNumber, e);
             throw new InvoicePdfGenerationException("PDF generation failed: " + e.getMessage(), e);

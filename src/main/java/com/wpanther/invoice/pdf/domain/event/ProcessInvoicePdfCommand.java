@@ -63,7 +63,7 @@ public class ProcessInvoicePdfCommand extends SagaCommand {
                                      String documentId, String invoiceId, String invoiceNumber,
                                      String signedXmlUrl, String invoiceDataJson) {
         super(sagaId, sagaStep, correlationId);
-        this.documentId = documentId;
+        this.documentId = Objects.requireNonNull(documentId, "documentId is required");
         this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
         this.invoiceNumber = Objects.requireNonNull(invoiceNumber, "invoiceNumber is required");
         this.signedXmlUrl = Objects.requireNonNull(signedXmlUrl, "signedXmlUrl is required");

@@ -10,6 +10,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class InvoicePdfCommandTest {
 
     @Test
+    @DisplayName("ProcessInvoicePdfCommand rejects null documentId")
+    void processCommand_nullDocumentId_throwsNullPointerException() {
+        assertThatThrownBy(() ->
+                new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
+                        null, "inv-001", "INV-001", "http://localhost/signed.xml", "{}"))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("documentId");
+    }
+
+    @Test
     @DisplayName("ProcessInvoicePdfCommand rejects null invoiceId")
     void processCommand_nullInvoiceId_throwsNullPointerException() {
         assertThatThrownBy(() ->

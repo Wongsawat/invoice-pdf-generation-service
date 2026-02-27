@@ -1,5 +1,6 @@
 package com.wpanther.invoice.pdf.infrastructure.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.invoice.pdf.application.service.SagaCommandHandler;
@@ -185,6 +186,44 @@ class SagaRouteConfigTest {
         assertThat(reply.isCompensated()).isTrue();
         assertThat(reply.getSagaId()).isEqualTo("saga-001");
         assertThat(reply.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
+    }
+
+    // -------------------------------------------------------------------------
+    // DLQ saga metadata recovery
+    // (tests the JSON parsing logic used by recoverAndNotifyOrchestrator)
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("DLQ recovery: raw JSON bytes yield saga coordinates via JsonNode.path().asText(null)")
+    void dlqRecovery_rawJsonBytes_sagaCoordinatesExtractable() throws Exception {
+        byte[] rawBytes = """
+            {"sagaId":"saga-001","sagaStep":"generate-invoice-pdf","correlationId":"corr-456","invoiceId":"inv-001"}
+            """.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        JsonNode node = objectMapper.readTree(rawBytes);
+
+        assertThat(node.path("sagaId").asText(null)).isEqualTo("saga-001");
+        assertThat(node.path("sagaStep").asText(null)).isEqualTo("generate-invoice-pdf");
+        assertThat(node.path("correlationId").asText(null)).isEqualTo("corr-456");
+
+        // Verify the extracted kebab-case sagaStep can be round-tripped to the enum
+        SagaStep step = objectMapper.readValue(
+                "\"" + node.path("sagaStep").asText() + "\"", SagaStep.class);
+        assertThat(step).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
+    }
+
+    @Test
+    @DisplayName("DLQ recovery: missing saga fields return null from JsonNode.path().asText(null)")
+    void dlqRecovery_missingSagaMetadata_asTextNullReturnsNull() throws Exception {
+        byte[] rawBytes = """
+            {"someOtherField":"value"}
+            """.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        JsonNode node = objectMapper.readTree(rawBytes);
+
+        assertThat(node.path("sagaId").asText(null)).isNull();
+        assertThat(node.path("sagaStep").asText(null)).isNull();
+        assertThat(node.path("correlationId").asText(null)).isNull();
     }
 
     @Test
