@@ -9,12 +9,16 @@ import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import com.wpanther.saga.domain.enums.SagaStep;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -202,6 +206,21 @@ class SagaCommandHandlerTest {
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 any(), contains("Failed to download signed XML"), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("Blank invoiceNumber → publishGenerationFailure before beginGeneration")
+    void handleProcessCommand_blankInvoiceNumber() {
+        ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(
+                "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
+                "doc-123", "inv-001", "   ", SIGNED_XML_URL, "{}");
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+
+        sagaCommandHandler.handleProcessCommand(cmd);
+
+        verify(pdfDocumentService).publishGenerationFailure(any(), contains("invoiceNumber"));
+        verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
+        verifyNoInteractions(signedXmlFetchPort);
     }
 
     @Test

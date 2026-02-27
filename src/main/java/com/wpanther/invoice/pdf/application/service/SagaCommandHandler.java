@@ -2,14 +2,16 @@ package com.wpanther.invoice.pdf.application.service;
 
 import com.wpanther.invoice.pdf.application.port.out.PdfStoragePort;
 import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
+import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,12 @@ import java.util.Optional;
 @Service
 @Slf4j
 public class SagaCommandHandler {
+
+    // MDC key constants — prevents typos in structured log fields
+    private static final String MDC_SAGA_ID         = "sagaId";
+    private static final String MDC_CORRELATION_ID  = "correlationId";
+    private static final String MDC_INVOICE_NUMBER  = "invoiceNumber";
+    private static final String MDC_INVOICE_ID      = "invoiceId";
 
     private final InvoicePdfDocumentService pdfDocumentService;
     private final InvoicePdfGenerationService pdfGenerationService;
@@ -63,9 +71,9 @@ public class SagaCommandHandler {
      * via {@link InvoicePdfDocumentService}.
      */
     public void handleProcessCommand(ProcessInvoicePdfCommand command) {
-        MDC.put("sagaId", command.getSagaId());
-        MDC.put("correlationId", command.getCorrelationId());
-        MDC.put("invoiceNumber", command.getInvoiceNumber());
+        MDC.put(MDC_SAGA_ID,        command.getSagaId());
+        MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
+        MDC.put(MDC_INVOICE_NUMBER, command.getInvoiceNumber());
         try {
             log.info("Handling ProcessInvoicePdfCommand for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceNumber());
@@ -98,13 +106,22 @@ public class SagaCommandHandler {
                     return;
                 }
 
+                // Validate invoice number
+                String invoiceNumber = command.getInvoiceNumber();
+                if (invoiceNumber == null || invoiceNumber.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(
+                            command, "invoiceNumber is null or blank in saga command");
+                    return;
+                }
+
                 // ── Short tx 1: create PENDING → GENERATING record ──────────────────
                 InvoicePdfDocument document = pdfDocumentService.beginGeneration(
-                        command.getInvoiceId(), command.getInvoiceNumber());
+                        command.getInvoiceId(), invoiceNumber);
                 int previousRetryCount =
                         existing.map(InvoicePdfDocument::getRetryCount).orElse(-1);
                 // ── Transaction committed ────────────────────────────────────────────
 
+                String s3Key = null;
                 try {
                     // ── NO TRANSACTION HELD HERE ────────────────────────────────────
 
@@ -113,10 +130,10 @@ public class SagaCommandHandler {
 
                     // Generate PDF bytes (CPU: FOP + PDFBox)
                     byte[] pdfBytes = pdfGenerationService.generatePdf(
-                            command.getInvoiceNumber(), signedXml, command.getInvoiceDataJson());
+                            invoiceNumber, signedXml, command.getInvoiceDataJson());
 
                     // Upload to MinIO (network I/O)
-                    String s3Key = pdfStoragePort.store(command.getInvoiceNumber(), pdfBytes);
+                    s3Key = pdfStoragePort.store(invoiceNumber, pdfBytes);
                     String fileUrl = pdfStoragePort.resolveUrl(s3Key);
 
                     // ── END NO-TRANSACTION BLOCK ─────────────────────────────────────
@@ -127,22 +144,49 @@ public class SagaCommandHandler {
                             previousRetryCount, command);
                     // ── Transaction committed ────────────────────────────────────────
 
-                    log.info("Successfully processed PDF generation for saga {} invoice {}",
-                            command.getSagaId(), command.getInvoiceNumber());
+                    log.debug("Successfully processed PDF generation for saga {} invoice {}",
+                            command.getSagaId(), invoiceNumber);
+
+                } catch (CallNotPermittedException e) {
+                    // Circuit breaker is OPEN — MinIO is unreachable; do not attempt upload or delete
+                    log.warn("MinIO circuit breaker OPEN for saga {} invoice {} — "
+                            + "no upload attempted, will retry when CB re-closes: {}",
+                            command.getSagaId(), invoiceNumber, e.getMessage());
+                    pdfDocumentService.failGenerationAndPublish(
+                            document.getId(), "MinIO circuit breaker open: " + e.getMessage(),
+                            previousRetryCount, command);
 
                 } catch (Exception e) {
+                    // If upload succeeded but the DB write failed, the MinIO object is orphaned —
+                    // attempt best-effort cleanup before marking the document as FAILED.
+                    if (s3Key != null) {
+                        try {
+                            pdfStoragePort.delete(s3Key);
+                            log.warn("Deleted orphaned MinIO object {} after processing failure for saga {}",
+                                    s3Key, command.getSagaId());
+                        } catch (Exception deleteEx) {
+                            log.warn("Failed to clean up orphaned MinIO object {} for saga {}: {}",
+                                    s3Key, command.getSagaId(), deleteEx.getMessage());
+                        }
+                    }
                     log.error("PDF generation/upload failed for saga {} invoice {}: {}",
-                            command.getSagaId(), command.getInvoiceNumber(), e.getMessage(), e);
+                            command.getSagaId(), invoiceNumber, e.getMessage(), e);
                     // ── Short tx 2 (failure): mark FAILED + write FAILURE reply atomically
                     pdfDocumentService.failGenerationAndPublish(
-                            document.getId(), describeException(e), previousRetryCount, command);
+                            document.getId(), describeThrowable(e), previousRetryCount, command);
                     // ── Transaction committed ────────────────────────────────────────
                 }
 
+            } catch (OptimisticLockingFailureException e) {
+                // Concurrent modification by another consumer — this is retryable via Camel
+                log.warn("Concurrent modification conflict for saga {} invoice {} — retryable: {}",
+                        command.getSagaId(), command.getInvoiceNumber(), e.getMessage());
+                pdfDocumentService.publishGenerationFailure(
+                        command, "Concurrent modification conflict: " + e.getMessage());
             } catch (Exception e) {
                 log.error("Unexpected error for saga {} invoice {}: {}",
                         command.getSagaId(), command.getInvoiceNumber(), e.getMessage(), e);
-                pdfDocumentService.publishGenerationFailure(command, describeException(e));
+                pdfDocumentService.publishGenerationFailure(command, describeThrowable(e));
             }
         } finally {
             MDC.clear();
@@ -155,9 +199,9 @@ public class SagaCommandHandler {
      * holds an open transaction during network I/O.
      */
     public void handleCompensation(CompensateInvoicePdfCommand command) {
-        MDC.put("sagaId", command.getSagaId());
-        MDC.put("correlationId", command.getCorrelationId());
-        MDC.put("invoiceId", command.getInvoiceId());
+        MDC.put(MDC_SAGA_ID,        command.getSagaId());
+        MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
+        MDC.put(MDC_INVOICE_ID,     command.getInvoiceId());
         try {
             log.info("Handling compensation for saga {} invoice {}",
                     command.getSagaId(), command.getInvoiceId());
@@ -192,7 +236,7 @@ public class SagaCommandHandler {
                 log.error("Failed to compensate for saga {} invoice {}: {}",
                         command.getSagaId(), command.getInvoiceId(), e.getMessage(), e);
                 pdfDocumentService.publishCompensationFailure(
-                        command, "Compensation failed: " + describeException(e));
+                        command, "Compensation failed: " + describeThrowable(e));
             }
         } finally {
             MDC.clear();
@@ -217,10 +261,6 @@ public class SagaCommandHandler {
             log.error("Cannot notify orchestrator of DLQ failure for saga {} — orchestrator must timeout",
                     command.getSagaId(), e);
         }
-    }
-
-    private String describeException(Exception e) {
-        return describeThrowable(e);
     }
 
     private String describeThrowable(Throwable t) {

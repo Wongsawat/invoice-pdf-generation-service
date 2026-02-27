@@ -53,6 +53,10 @@ public class FopInvoicePdfGenerator {
     public FopInvoicePdfGenerator(
             @Value("${app.pdf.generation.max-concurrent-renders:3}") int maxConcurrentRenders,
             MeterRegistry meterRegistry) {
+        if (maxConcurrentRenders < 1) {
+            throw new IllegalStateException(
+                    "app.pdf.generation.max-concurrent-renders must be >= 1, got: " + maxConcurrentRenders);
+        }
         try {
             this.fopFactory = createFopFactory();
 
@@ -73,28 +77,24 @@ public class FopInvoicePdfGenerator {
                     .description("Available FOP concurrent render permits")
                     .register(meterRegistry);
 
-            log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={}", maxConcurrentRenders);
+            log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={} (each FOP render ~50–200 MB heap)",
+                    maxConcurrentRenders);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize FOP PDF generator", e);
         }
     }
 
     private FopFactory createFopFactory() throws Exception {
-        try {
-            ClassPathResource configResource = new ClassPathResource(FOP_CONFIG_PATH);
-            if (configResource.exists()) {
-                try (InputStream configStream = configResource.getInputStream()) {
-                    URI baseUri = new File(".").toURI();
-                    return FopFactory.newInstance(baseUri, configStream);
-                }
-            } else {
-                log.warn("FOP config not found at {}, using default configuration", FOP_CONFIG_PATH);
-                return FopFactory.newInstance(new File(".").toURI());
+        ClassPathResource configResource = new ClassPathResource(FOP_CONFIG_PATH);
+        if (configResource.exists()) {
+            // Config file is present — fail fast if it is malformed rather than silently
+            // falling back to FOP defaults (which would produce PDFs with wrong fonts).
+            try (InputStream configStream = configResource.getInputStream()) {
+                return FopFactory.newInstance(new File(".").toURI(), configStream);
             }
-        } catch (Exception e) {
-            log.warn("Failed to load FOP config, using default: {}", e.getMessage());
-            return FopFactory.newInstance(new File(".").toURI());
         }
+        log.warn("FOP config not found at {}, using default configuration", FOP_CONFIG_PATH);
+        return FopFactory.newInstance(new File(".").toURI());
     }
 
     /**

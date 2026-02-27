@@ -5,6 +5,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -62,7 +66,7 @@ class RestTemplateSignedXmlFetcherTest {
 
         assertThatThrownBy(() -> fetcher.fetch(url))
                 .isInstanceOf(SignedXmlFetchException.class)
-                .hasMessageContaining("Failed to download signed XML from");
+                .hasMessageContaining("Empty response fetching signed XML from");
     }
 
     @Test
@@ -73,7 +77,7 @@ class RestTemplateSignedXmlFetcherTest {
 
         assertThatThrownBy(() -> fetcher.fetch(url))
                 .isInstanceOf(SignedXmlFetchException.class)
-                .hasMessageContaining("Failed to download signed XML from");
+                .hasMessageContaining("Empty response fetching signed XML from");
     }
 
     @Test
@@ -98,5 +102,59 @@ class RestTemplateSignedXmlFetcherTest {
                 .isInstanceOf(SignedXmlFetchException.class);
 
         verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void fetch_fileScheme_throwsException() {
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
+        String url = "file:///etc/passwd";
+
+        assertThatThrownBy(() -> fetcher.fetch(url))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("disallowed scheme")
+                .hasMessageContaining("file");
+
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void fetch_4xxResponse_throwsExceptionWithVerifyMessage() {
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
+        String url = "http://localhost:9000/invoices/missing.xml";
+        when(restTemplate.getForObject(url, String.class))
+                .thenThrow(HttpClientErrorException.create(
+                        HttpStatus.NOT_FOUND, "Not Found", null, null, null));
+
+        assertThatThrownBy(() -> fetcher.fetch(url))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("404")
+                .hasMessageContaining("verify the URL is correct");
+    }
+
+    @Test
+    void fetch_5xxResponse_throwsExceptionWithRetryMessage() {
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
+        String url = "http://localhost:9000/invoices/signed.xml";
+        when(restTemplate.getForObject(url, String.class))
+                .thenThrow(HttpServerErrorException.create(
+                        HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", null, null, null));
+
+        assertThatThrownBy(() -> fetcher.fetch(url))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("500")
+                .hasMessageContaining("consider retrying");
+    }
+
+    @Test
+    void fetch_networkTimeout_throwsExceptionWithNetworkMessage() {
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "localhost");
+        String url = "http://localhost:9000/invoices/signed.xml";
+        when(restTemplate.getForObject(url, String.class))
+                .thenThrow(new ResourceAccessException("Connection timed out"));
+
+        assertThatThrownBy(() -> fetcher.fetch(url))
+                .isInstanceOf(SignedXmlFetchException.class)
+                .hasMessageContaining("Network error")
+                .hasMessageContaining("Connection timed out");
     }
 }

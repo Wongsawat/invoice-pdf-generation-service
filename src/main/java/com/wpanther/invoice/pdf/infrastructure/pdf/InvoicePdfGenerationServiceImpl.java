@@ -46,6 +46,11 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
 
         log.info("Starting PDF generation for invoice: {}", invoiceNumber);
 
+        if (invoiceDataJson == null) {
+            throw new InvoicePdfGenerationException(
+                    "invoiceDataJson is null for invoice: " + invoiceNumber);
+        }
+
         try {
             // Step 1: Convert invoice JSON to XML for FOP processing
             String invoiceXml = convertJsonToXml(invoiceDataJson, invoiceNumber);
@@ -74,9 +79,10 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
         }
     }
 
-    // Thread-safe: XMLOutputFactory is stateless after construction; createXMLStreamWriter() is safe
-    // to call concurrently. Cached here to avoid a ServiceLoader SPI scan on every PDF generation.
-    private static final XMLOutputFactory XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance();
+    // ThreadLocal avoids any implementation-specific contention in XMLOutputFactory while still
+    // caching the factory per thread to avoid a ServiceLoader SPI scan on every PDF generation.
+    private static final ThreadLocal<XMLOutputFactory> XML_OUTPUT_FACTORY =
+            ThreadLocal.withInitial(XMLOutputFactory::newInstance);
 
     /**
      * Convert invoice JSON data to XML format for XSL-FO processing.
@@ -84,7 +90,7 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
      */
     private String convertJsonToXml(String invoiceDataJson, String invoiceNumber) throws Exception {
         StringWriter sw = new StringWriter();
-        XMLStreamWriter writer = XML_OUTPUT_FACTORY.createXMLStreamWriter(sw);
+        XMLStreamWriter writer = XML_OUTPUT_FACTORY.get().createXMLStreamWriter(sw);
 
         try {
             JsonNode root = objectMapper.readTree(invoiceDataJson);

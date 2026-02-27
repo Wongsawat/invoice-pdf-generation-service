@@ -28,6 +28,15 @@ class FopInvoicePdfGeneratorTest {
     }
 
     @Test
+    @DisplayName("Constructor rejects maxConcurrentRenders < 1 with IllegalStateException")
+    void constructor_invalidMaxConcurrentRenders_throwsIllegalStateException() {
+        assertThatThrownBy(() -> new FopInvoicePdfGenerator(0, new SimpleMeterRegistry()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("max-concurrent-renders")
+                .hasMessageContaining("0");
+    }
+
+    @Test
     @DisplayName("Semaphore is initialised with the configured permit count")
     void constructor_semaphorePermitsMatchConfiguration() throws Exception {
         FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(5, new SimpleMeterRegistry());

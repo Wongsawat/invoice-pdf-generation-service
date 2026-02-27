@@ -83,7 +83,7 @@ public class InvoicePdfDocumentRepositoryAdapter implements InvoicePdfDocumentRe
             .documentUrl(entity.getDocumentUrl())
             .fileSize(entity.getFileSize() != null ? entity.getFileSize() : 0L)
             .mimeType(entity.getMimeType())
-            .xmlEmbedded(entity.getXmlEmbedded() != null && entity.getXmlEmbedded())
+            .xmlEmbedded(Boolean.TRUE.equals(entity.getXmlEmbedded()))
             .status(entity.getStatus())
             .errorMessage(entity.getErrorMessage())
             .retryCount(entity.getRetryCount() != null ? entity.getRetryCount() : 0)
