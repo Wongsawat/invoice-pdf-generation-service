@@ -7,10 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.xml.parsers.SAXParserFactory;
 import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
+import java.io.StringReader;
 import java.io.StringWriter;
+import org.xml.sax.InputSource;
 
 /**
  * Implementation of InvoicePdfGenerationService using Apache FOP and PDFBox.
@@ -56,6 +59,9 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
             String invoiceXml = convertJsonToXml(invoiceDataJson, invoiceNumber);
             log.debug("Converted invoice data to XML format");
 
+            // Step 1b: Validate generated XML is well-formed before passing to FOP
+            validateXmlWellFormedness(invoiceXml, invoiceNumber);
+
             // Step 2: Generate base PDF using FOP
             byte[] basePdf = fopPdfGenerator.generatePdf(invoiceXml);
             log.debug("Generated base PDF: {} bytes", basePdf.length);
@@ -83,6 +89,20 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
     // caching the factory per thread to avoid a ServiceLoader SPI scan on every PDF generation.
     private static final ThreadLocal<XMLOutputFactory> XML_OUTPUT_FACTORY =
             ThreadLocal.withInitial(XMLOutputFactory::newInstance);
+
+    private static final SAXParserFactory SAX_PARSER_FACTORY = SAXParserFactory.newInstance();
+
+    private void validateXmlWellFormedness(String xml, String invoiceNumber)
+            throws InvoicePdfGenerationException {
+        try {
+            SAX_PARSER_FACTORY.newSAXParser().parse(
+                    new InputSource(new StringReader(xml)),
+                    new org.xml.sax.helpers.DefaultHandler());
+        } catch (Exception e) {
+            throw new InvoicePdfGenerationException(
+                    "Generated XML is not well-formed for invoice " + invoiceNumber + ": " + e.getMessage(), e);
+        }
+    }
 
     /**
      * Convert invoice JSON data to XML format for XSL-FO processing.

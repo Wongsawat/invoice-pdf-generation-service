@@ -27,7 +27,7 @@ class PdfA3ConverterTest {
 
     @BeforeEach
     void setUp() {
-        converter = new PdfA3Converter(new SimpleMeterRegistry());
+        converter = new PdfA3Converter("icc/sRGB.icc", new SimpleMeterRegistry());
     }
 
     // -------------------------------------------------------------------------
@@ -147,6 +147,13 @@ class PdfA3ConverterTest {
         ReflectionTestUtils.setField(converter, "iccProfileBytes", null);
 
         assertThatCode(() -> converter.convertToPdfA3(minimalPdf, "<invoice/>", "invoice.xml", "INV-C"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Constructor with non-existent ICC path falls back to built-in profile without throwing")
+    void constructor_nonExistentIccProfilePath_doesNotThrow() {
+        assertThatCode(() -> new PdfA3Converter("icc/does-not-exist.icc", new SimpleMeterRegistry()))
                 .doesNotThrowAnyException();
     }
 

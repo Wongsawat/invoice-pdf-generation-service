@@ -165,8 +165,8 @@ public class SagaCommandHandler {
                             log.warn("Deleted orphaned MinIO object {} after processing failure for saga {}",
                                     s3Key, command.getSagaId());
                         } catch (Exception deleteEx) {
-                            log.warn("Failed to clean up orphaned MinIO object {} for saga {}: {}",
-                                    s3Key, command.getSagaId(), deleteEx.getMessage());
+                            log.error("[ORPHAN_PDF] s3Key={} saga={} invoiceNumber={} error={} — manual recovery required: delete object from MinIO bucket",
+                                    s3Key, command.getSagaId(), invoiceNumber, deleteEx.getMessage());
                         }
                     }
                     log.error("PDF generation/upload failed for saga {} invoice {}: {}",

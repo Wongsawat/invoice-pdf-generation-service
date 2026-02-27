@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(InvoicePdfDocumentRepositoryIntegrationTest.FlywayMigrationConfig.class)
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=none")
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class InvoicePdfDocumentRepositoryIntegrationTest {
 
     @Container

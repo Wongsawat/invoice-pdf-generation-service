@@ -23,14 +23,14 @@ class FopInvoicePdfGeneratorTest {
     @DisplayName("Constructor succeeds and compiles XSL template")
     void constructor_compilesTemplateSuccessfully() {
         // No exception = template found and compiled
-        assertThatCode(() -> new FopInvoicePdfGenerator(2, new SimpleMeterRegistry()))
+        assertThatCode(() -> new FopInvoicePdfGenerator(2, 52428800L, new SimpleMeterRegistry()))
                 .doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("Constructor rejects maxConcurrentRenders < 1 with IllegalStateException")
     void constructor_invalidMaxConcurrentRenders_throwsIllegalStateException() {
-        assertThatThrownBy(() -> new FopInvoicePdfGenerator(0, new SimpleMeterRegistry()))
+        assertThatThrownBy(() -> new FopInvoicePdfGenerator(0, 52428800L, new SimpleMeterRegistry()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("max-concurrent-renders")
                 .hasMessageContaining("0");
@@ -39,7 +39,7 @@ class FopInvoicePdfGeneratorTest {
     @Test
     @DisplayName("Semaphore is initialised with the configured permit count")
     void constructor_semaphorePermitsMatchConfiguration() throws Exception {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(5, new SimpleMeterRegistry());
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(5, 52428800L, new SimpleMeterRegistry());
         Field f = FopInvoicePdfGenerator.class.getDeclaredField("renderSemaphore");
         f.setAccessible(true);
         Semaphore s = (Semaphore) f.get(gen);
@@ -50,7 +50,7 @@ class FopInvoicePdfGeneratorTest {
     @Test
     @DisplayName("Valid invoice XML → returns non-empty PDF bytes starting with %PDF")
     void generatePdf_validXml_returnsPdfBytes() throws Exception {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, new SimpleMeterRegistry());
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
         String xml = "<invoice>"
                 + "<invoiceNumber>INV-TEST-001</invoiceNumber>"
                 + "<invoiceDate>2024-01-15</invoiceDate>"
@@ -76,9 +76,35 @@ class FopInvoicePdfGeneratorTest {
     @Test
     @DisplayName("Malformed XML → PdfGenerationException")
     void generatePdf_malformedXml_throwsPdfGenerationException() {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, new SimpleMeterRegistry());
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
         assertThatThrownBy(() -> gen.generatePdf("this is not xml <<<"))
                 .isInstanceOf(FopInvoicePdfGenerator.PdfGenerationException.class);
+    }
+
+    @Test
+    @DisplayName("Constructor rejects maxPdfSizeBytes < 1 with IllegalStateException")
+    void constructor_invalidMaxPdfSizeBytes_throwsIllegalStateException() {
+        assertThatThrownBy(() -> new FopInvoicePdfGenerator(1, 0L, new SimpleMeterRegistry()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("max-pdf-size-bytes")
+                .hasMessageContaining("0");
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws PdfGenerationException when PDF exceeds max size")
+    void generatePdf_pdfExceedsMaxSize_throwsPdfGenerationException() throws Exception {
+        // Set a 1-byte limit so any real PDF will exceed it
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, 1L, new SimpleMeterRegistry());
+        String xml = "<invoice>"
+                + "<invoiceNumber>INV-TOOBIG</invoiceNumber>"
+                + "<seller><name>S</name></seller>"
+                + "<buyer><name>B</name></buyer>"
+                + "<lineItems/>"
+                + "</invoice>";
+
+        assertThatThrownBy(() -> gen.generatePdf(xml))
+                .isInstanceOf(FopInvoicePdfGenerator.PdfGenerationException.class)
+                .hasMessageContaining("exceeds max allowed size");
     }
 
     @Test
@@ -92,7 +118,7 @@ class FopInvoicePdfGeneratorTest {
     @Test
     @DisplayName("generatePdf() on an interrupted thread throws PdfGenerationException")
     void generatePdf_threadAlreadyInterrupted_throwsPdfGenerationException() {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, new SimpleMeterRegistry());
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
         Thread.currentThread().interrupt();  // mark thread as interrupted before acquire()
         try {
             assertThatThrownBy(() -> gen.generatePdf("<invoice/>"))
@@ -106,7 +132,7 @@ class FopInvoicePdfGeneratorTest {
     @Test
     @DisplayName("Semaphore blocks callers when all permits are held")
     void generatePdf_semaphoreBlocksWhenAtCapacity() throws Exception {
-        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, new SimpleMeterRegistry());
+        FopInvoicePdfGenerator gen = new FopInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
 
         // Drain the single permit so the next caller must wait
         Field f = FopInvoicePdfGenerator.class.getDeclaredField("renderSemaphore");

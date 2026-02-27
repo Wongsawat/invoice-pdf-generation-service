@@ -50,13 +50,21 @@ public class FopInvoicePdfGenerator {
     private final Timer renderTimer;
     private final DistributionSummary pdfSizeSummary;
 
+    private final long maxPdfSizeBytes;
+
     public FopInvoicePdfGenerator(
             @Value("${app.pdf.generation.max-concurrent-renders:3}") int maxConcurrentRenders,
+            @Value("${app.pdf.generation.max-pdf-size-bytes:52428800}") long maxPdfSizeBytes,
             MeterRegistry meterRegistry) {
         if (maxConcurrentRenders < 1) {
             throw new IllegalStateException(
                     "app.pdf.generation.max-concurrent-renders must be >= 1, got: " + maxConcurrentRenders);
         }
+        if (maxPdfSizeBytes < 1) {
+            throw new IllegalStateException(
+                    "app.pdf.generation.max-pdf-size-bytes must be >= 1, got: " + maxPdfSizeBytes);
+        }
+        this.maxPdfSizeBytes = maxPdfSizeBytes;
         try {
             this.fopFactory = createFopFactory();
 
@@ -77,8 +85,8 @@ public class FopInvoicePdfGenerator {
                     .description("Available FOP concurrent render permits")
                     .register(meterRegistry);
 
-            log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={} (each FOP render ~50–200 MB heap)",
-                    maxConcurrentRenders);
+            log.info("FopInvoicePdfGenerator initialized: maxConcurrentRenders={} maxPdfSizeBytes={} (each FOP render ~50–200 MB heap)",
+                    maxConcurrentRenders, maxPdfSizeBytes);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize FOP PDF generator", e);
         }
@@ -121,6 +129,11 @@ public class FopInvoicePdfGenerator {
                 new ByteArrayInputStream(xmlData.getBytes(StandardCharsets.UTF_8)));
             transformer.transform(xmlSource, new SAXResult(fop.getDefaultHandler()));
             byte[] pdfBytes = pdfOutput.toByteArray();
+            if (pdfBytes.length > maxPdfSizeBytes) {
+                throw new PdfGenerationException(
+                        String.format("Generated PDF exceeds max allowed size: %d bytes > %d bytes",
+                                pdfBytes.length, maxPdfSizeBytes));
+            }
             log.info("Generated PDF: {} bytes", pdfBytes.length);
             pdfSizeSummary.record(pdfBytes.length);
             return pdfBytes;

@@ -18,6 +18,7 @@ import org.apache.xmpbox.schema.DublinCoreSchema;
 import org.apache.xmpbox.schema.PDFAIdentificationSchema;
 import org.apache.xmpbox.schema.XMPBasicSchema;
 import org.apache.xmpbox.xml.XmpSerializer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -46,16 +47,18 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class PdfA3Converter {
 
-    private static final String ICC_PROFILE_PATH = "icc/sRGB.icc";
     private static final String MIME_TYPE_XML = "application/xml";
     private static final String AF_RELATIONSHIP_SOURCE = "Source";
 
+    private final String iccProfilePath;
     private final byte[] iccProfileBytes;   // loaded once at startup
     private final Timer conversionTimer;
 
-    public PdfA3Converter(MeterRegistry meterRegistry) {
-        this.iccProfileBytes  = loadIccProfile();
-        this.conversionTimer  = meterRegistry.timer("pdf.conversion.pdfa3");
+    public PdfA3Converter(@Value("${app.pdf.icc-profile-path:icc/sRGB.icc}") String iccProfilePath,
+                          MeterRegistry meterRegistry) {
+        this.iccProfilePath  = iccProfilePath;
+        this.iccProfileBytes = loadIccProfile(iccProfilePath);
+        this.conversionTimer = meterRegistry.timer("pdf.conversion.pdfa3");
     }
 
     /**
@@ -212,17 +215,17 @@ public class PdfA3Converter {
      * Returns null if the profile cannot be found, in which case color
      * profile setup will be skipped (PDF/A compliance may be degraded).
      */
-    private static byte[] loadIccProfile() {
+    private byte[] loadIccProfile(String profilePath) {
         try {
-            ClassPathResource iccResource = new ClassPathResource(ICC_PROFILE_PATH);
+            ClassPathResource iccResource = new ClassPathResource(profilePath);
             if (iccResource.exists()) {
                 try (InputStream is = iccResource.getInputStream()) {
                     byte[] bytes = is.readAllBytes();
-                    log.info("Loaded ICC profile: {} ({} bytes)", ICC_PROFILE_PATH, bytes.length);
+                    log.info("Loaded ICC profile: {} ({} bytes)", profilePath, bytes.length);
                     return bytes;
                 }
             }
-            log.warn("ICC profile not found at {}, trying built-in fallback", ICC_PROFILE_PATH);
+            log.warn("ICC profile not found at {}, trying built-in fallback", profilePath);
             InputStream fallback = PdfA3Converter.class.getResourceAsStream(
                     "/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
             if (fallback != null) {

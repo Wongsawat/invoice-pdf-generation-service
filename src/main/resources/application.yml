@@ -63,9 +63,11 @@ app:
     base-url: ${MINIO_BASE_URL:http://localhost:9001/invoices}
     path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
   pdf:
+    icc-profile-path: ${PDF_ICC_PROFILE_PATH:icc/sRGB.icc}
     generation:
       max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
       max-concurrent-renders: ${PDF_MAX_CONCURRENT_RENDERS:3}
+      max-pdf-size-bytes: ${PDF_MAX_SIZE_BYTES:52428800}
   invoice:
     default-vat-rate: ${INVOICE_DEFAULT_VAT_RATE:7}
   rest-client:
