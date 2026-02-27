@@ -32,15 +32,18 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
     private final PdfA3Converter pdfA3Converter;
     private final ObjectMapper objectMapper;
     private final String defaultVatRate;
+    private final int maxJsonSizeBytes;
 
     public InvoicePdfGenerationServiceImpl(FopInvoicePdfGenerator fopPdfGenerator,
                                            PdfA3Converter pdfA3Converter,
                                            ObjectMapper objectMapper,
-                                           @Value("${app.invoice.default-vat-rate:7}") String defaultVatRate) {
+                                           @Value("${app.invoice.default-vat-rate:7}") String defaultVatRate,
+                                           @Value("${app.invoice.max-json-size-bytes:1048576}") int maxJsonSizeBytes) {
         this.fopPdfGenerator  = fopPdfGenerator;
         this.pdfA3Converter   = pdfA3Converter;
         this.objectMapper     = objectMapper;
         this.defaultVatRate   = defaultVatRate;
+        this.maxJsonSizeBytes = maxJsonSizeBytes;
     }
 
     @Override
@@ -52,6 +55,11 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
         if (invoiceDataJson == null) {
             throw new InvoicePdfGenerationException(
                     "invoiceDataJson is null for invoice: " + invoiceNumber);
+        }
+        if (invoiceDataJson.length() > maxJsonSizeBytes) {
+            throw new InvoicePdfGenerationException(
+                    "invoiceDataJson exceeds max allowed size for invoice " + invoiceNumber
+                    + ": " + invoiceDataJson.length() + " chars > " + maxJsonSizeBytes);
         }
 
         try {
@@ -90,12 +98,15 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
     private static final ThreadLocal<XMLOutputFactory> XML_OUTPUT_FACTORY =
             ThreadLocal.withInitial(XMLOutputFactory::newInstance);
 
-    private static final SAXParserFactory SAX_PARSER_FACTORY = SAXParserFactory.newInstance();
+    // One SAXParserFactory per thread — SAXParserFactory is not guaranteed thread-safe by JAXP.
+    // Mirrors the XML_OUTPUT_FACTORY pattern used above.
+    private static final ThreadLocal<SAXParserFactory> SAX_PARSER_FACTORY =
+            ThreadLocal.withInitial(SAXParserFactory::newInstance);
 
     private void validateXmlWellFormedness(String xml, String invoiceNumber)
             throws InvoicePdfGenerationException {
         try {
-            SAX_PARSER_FACTORY.newSAXParser().parse(
+            SAX_PARSER_FACTORY.get().newSAXParser().parse(
                     new InputSource(new StringReader(xml)),
                     new org.xml.sax.helpers.DefaultHandler());
         } catch (Exception e) {

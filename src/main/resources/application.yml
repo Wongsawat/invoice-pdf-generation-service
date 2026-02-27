@@ -70,6 +70,7 @@ app:
       max-pdf-size-bytes: ${PDF_MAX_SIZE_BYTES:52428800}
   invoice:
     default-vat-rate: ${INVOICE_DEFAULT_VAT_RATE:7}
+    max-json-size-bytes: ${INVOICE_MAX_JSON_SIZE_BYTES:1048576}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:10000}

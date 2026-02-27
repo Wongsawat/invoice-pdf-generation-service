@@ -54,7 +54,7 @@ class InvoicePdfGenerationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new InvoicePdfGenerationServiceImpl(fopGenerator, pdfA3Converter, new ObjectMapper(), "7");
+        service = new InvoicePdfGenerationServiceImpl(fopGenerator, pdfA3Converter, new ObjectMapper(), "7", 1048576);
     }
 
     // -------------------------------------------------------------------------
@@ -176,6 +176,20 @@ class InvoicePdfGenerationServiceImplTest {
         assertThatThrownBy(() ->
                 service.generatePdf(INVOICE_NUMBER, SIGNED_XML, "{ not valid json ["))
                 .isInstanceOf(InvoicePdfGenerationException.class);
+        verifyNoInteractions(fopGenerator, pdfA3Converter);
+    }
+
+    @Test
+    @DisplayName("M2 fix: JSON payload exceeding max size → InvoicePdfGenerationException before parsing")
+    void generatePdf_jsonExceedsMaxSize_throwsException() {
+        // Build a service with a tiny 10-byte limit
+        InvoicePdfGenerationServiceImpl smallLimitService =
+                new InvoicePdfGenerationServiceImpl(fopGenerator, pdfA3Converter, new ObjectMapper(), "7", 10);
+
+        assertThatThrownBy(() ->
+                smallLimitService.generatePdf(INVOICE_NUMBER, SIGNED_XML, FULL_JSON))
+                .isInstanceOf(InvoicePdfGenerationException.class)
+                .hasMessageContaining("exceeds max allowed size");
         verifyNoInteractions(fopGenerator, pdfA3Converter);
     }
 
