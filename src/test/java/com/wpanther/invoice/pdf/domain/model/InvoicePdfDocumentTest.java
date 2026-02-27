@@ -144,6 +144,19 @@ class InvoicePdfDocumentTest {
     }
 
     @Test
+    @DisplayName("Builder.fileSize() rejects negative value with IllegalArgumentException")
+    void testBuilder_NegativeFileSize_ThrowsIllegalArgumentException() {
+        assertThatThrownBy(() ->
+                InvoicePdfDocument.builder()
+                        .invoiceId("inv-001")
+                        .invoiceNumber("INV-001")
+                        .fileSize(-1L)
+                        .build()
+        ).isInstanceOf(IllegalArgumentException.class)
+         .hasMessageContaining("non-negative");
+    }
+
+    @Test
     @DisplayName("markCompleted() with zero fileSize throws IllegalArgumentException")
     void testMarkCompleted_ZeroFileSize() {
         InvoicePdfDocument doc = pendingDocument();

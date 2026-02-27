@@ -7,6 +7,7 @@ import com.wpanther.saga.domain.model.SagaCommand;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -47,6 +48,6 @@ public class CompensateInvoicePdfCommand extends SagaCommand {
                                         String documentId, String invoiceId) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
+        this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
     }
 }

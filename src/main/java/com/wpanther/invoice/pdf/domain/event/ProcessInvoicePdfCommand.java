@@ -7,6 +7,7 @@ import com.wpanther.saga.domain.model.SagaCommand;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -63,9 +64,9 @@ public class ProcessInvoicePdfCommand extends SagaCommand {
                                      String signedXmlUrl, String invoiceDataJson) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
-        this.invoiceNumber = invoiceNumber;
-        this.signedXmlUrl = signedXmlUrl;
+        this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
+        this.invoiceNumber = Objects.requireNonNull(invoiceNumber, "invoiceNumber is required");
+        this.signedXmlUrl = Objects.requireNonNull(signedXmlUrl, "signedXmlUrl is required");
         this.invoiceDataJson = invoiceDataJson;
     }
 }

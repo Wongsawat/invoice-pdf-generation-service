@@ -252,6 +252,9 @@ public class InvoicePdfDocument {
         }
 
         public Builder fileSize(long fileSize) {
+            if (fileSize < 0) {
+                throw new IllegalArgumentException("fileSize must be non-negative, got: " + fileSize);
+            }
             this.fileSize = fileSize;
             return this;
         }
