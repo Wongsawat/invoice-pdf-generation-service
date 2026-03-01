@@ -132,22 +132,31 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
                         "Rejected URL with private IP literal: " + host + ". Use a hostname instead.");
             }
 
-            // DNS rebinding protection: resolve the hostname and reject if it maps to a
-            // private IP address. An attacker who controls DNS for an allowlisted external
+            // DNS rebinding protection: resolve the hostname and reject if ANY returned IP
+            // is in a private range. An attacker who controls DNS for an allowlisted external
             // name could re-point it to internal infrastructure after the allowlist check.
             // 'localhost' is excluded — it always maps to loopback in any JVM and the
             // rebinding attack targets external names, not loopback aliases.
-            // If DNS resolution fails (e.g. in unit-test environments without network),
+            // getAllByName is used instead of getByName to cover multi-homed hosts: a hostname
+            // with both a public and a private A-record is rejected regardless of which IP the
+            // JVM would select for the actual connection.
+            // NOTE: InetAddress.getAllByName() is a blocking OS call. Under degraded DNS
+            // conditions it can stall the calling thread for up to the OS resolver timeout
+            // (typically 5–30 s). If DNS latency becomes a concern, move this check to a
+            // bounded executor or adopt an async DNS resolver.
+            // If DNS resolution fails entirely (e.g. in unit-test environments without network),
             // a warning is logged and the request proceeds; the connection will fail at the
             // network layer with a clear error.
             if (!host.equalsIgnoreCase("localhost")) {
                 try {
-                    String resolvedIp = InetAddress.getByName(host).getHostAddress();
-                    if (isPrivateIpLiteral(resolvedIp)) {
-                        throw new SignedXmlFetchException(
-                                "Rejected URL: host '" + host + "' resolves to private IP '"
-                                + resolvedIp + "' (DNS rebinding protection). "
-                                + "Use an external, publicly-routable hostname.");
+                    for (InetAddress addr : InetAddress.getAllByName(host)) {
+                        String resolvedIp = addr.getHostAddress();
+                        if (isPrivateIpLiteral(resolvedIp)) {
+                            throw new SignedXmlFetchException(
+                                    "Rejected URL: host '" + host + "' resolves to private IP '"
+                                    + resolvedIp + "' (DNS rebinding protection). "
+                                    + "Use an external, publicly-routable hostname.");
+                        }
                     }
                 } catch (SignedXmlFetchException e) {
                     throw e;

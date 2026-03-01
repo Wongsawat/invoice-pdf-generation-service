@@ -4,6 +4,7 @@ import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort.SignedXm
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
@@ -11,6 +12,8 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+
+import java.net.InetAddress;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -235,5 +238,29 @@ class RestTemplateSignedXmlFetcherTest {
 
         // Should not throw — resolution failure is treated as a warning, not a rejection
         assertThat(fetcher.fetch(url)).isEqualTo("<invoice/>");
+    }
+
+    @Test
+    void fetch_hostnameResolvesToPrivateIp_throwsExceptionWithDnsRebindingMessage() throws Exception {
+        // Simulate DNS rebinding: an allowlisted external hostname resolves to a private IP.
+        // getAllByName is mocked to return a single address whose getHostAddress() returns
+        // an RFC-1918 address, which must be rejected regardless of the allowlist entry.
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "legitimate.example.com");
+        String url = "http://legitimate.example.com/invoices/signed.xml";
+
+        InetAddress mockAddr = mock(InetAddress.class);
+        when(mockAddr.getHostAddress()).thenReturn("10.0.0.1");
+
+        try (MockedStatic<InetAddress> inetAddressMock = mockStatic(InetAddress.class)) {
+            inetAddressMock.when(() -> InetAddress.getAllByName("legitimate.example.com"))
+                    .thenReturn(new InetAddress[]{mockAddr});
+
+            assertThatThrownBy(() -> fetcher.fetch(url))
+                    .isInstanceOf(SignedXmlFetchException.class)
+                    .hasMessageContaining("DNS rebinding protection")
+                    .hasMessageContaining("10.0.0.1");
+        }
+
+        verifyNoInteractions(restTemplate);
     }
 }

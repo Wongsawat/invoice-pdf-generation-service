@@ -29,8 +29,18 @@ public class OutboxConfig {
         return new JpaOutboxEventRepository(springRepository);
     }
 
+    /**
+     * Exposes the HC5 client as a managed bean so Spring calls {@code close()} on it
+     * when the application context shuts down (Spring recognises {@link java.io.Closeable}
+     * beans and invokes {@code close()} via {@code DisposableBeanAdapter}).
+     *
+     * HC5 timeout semantics:
+     *   setConnectTimeout            → TCP connection establishment
+     *   setConnectionRequestTimeout  → pool-borrow timeout (use connectTimeout, not readTimeout)
+     *   setResponseTimeout           → socket read / server response timeout (the "read timeout")
+     */
     @Bean
-    public RestTemplate restTemplate() {
+    public CloseableHttpClient httpClient() {
         if (connectTimeout <= 0) {
             throw new IllegalStateException(
                     "app.rest-client.connect-timeout must be > 0, got: " + connectTimeout);
@@ -39,17 +49,18 @@ public class OutboxConfig {
             throw new IllegalStateException(
                     "app.rest-client.read-timeout must be > 0, got: " + readTimeout);
         }
-        // HC5: setConnectTimeout  → TCP connection establishment
-        //      setConnectionRequestTimeout → pool-borrow timeout (use connectTimeout, not readTimeout)
-        //      setResponseTimeout  → socket read / server response timeout (the "read timeout")
         RequestConfig requestConfig = RequestConfig.custom()
                 .setConnectTimeout(Timeout.ofMilliseconds(connectTimeout))
                 .setConnectionRequestTimeout(Timeout.ofMilliseconds(connectTimeout))
                 .setResponseTimeout(Timeout.ofMilliseconds(readTimeout))
                 .build();
-        CloseableHttpClient httpClient = HttpClients.custom()
+        return HttpClients.custom()
                 .setDefaultRequestConfig(requestConfig)
                 .build();
+    }
+
+    @Bean
+    public RestTemplate restTemplate(CloseableHttpClient httpClient) {
         return new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient));
     }
 }

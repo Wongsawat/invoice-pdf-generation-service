@@ -88,6 +88,13 @@ public class InvoicePdfDocumentEntity {
         if (id == null) {
             id = UUID.randomUUID();
         }
+        // Defence-in-depth: the normal path always supplies createdAt via toEntity()
+        // (the domain model Builder defaults to LocalDateTime.now()). This guard
+        // prevents a NOT NULL constraint failure if the entity is ever constructed
+        // directly via its own Lombok @Builder without going through the domain model.
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
         if (status == null) {
             status = GenerationStatus.PENDING;
         }
