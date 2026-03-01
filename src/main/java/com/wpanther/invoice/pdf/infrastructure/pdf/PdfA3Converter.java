@@ -125,7 +125,7 @@ public class PdfA3Converter {
 
         // XMP Basic metadata
         XMPBasicSchema xmpBasic = xmp.createAndAddXMPBasicSchema();
-        Calendar now = GregorianCalendar.from(LocalDateTime.now().atZone(ZoneId.systemDefault()));
+        Calendar now = GregorianCalendar.from(LocalDateTime.now().atZone(ZoneId.of("Asia/Bangkok")));
         xmpBasic.setCreateDate(now);
         xmpBasic.setModifyDate(now);
         xmpBasic.setCreatorTool("Thai e-Tax Invoice System");

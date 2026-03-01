@@ -103,11 +103,13 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
 
     // ThreadLocal avoids any implementation-specific contention in XMLOutputFactory while still
     // caching the factory per thread to avoid a ServiceLoader SPI scan on every PDF generation.
+    // remove() is called after each use to prevent classloader leaks in servlet containers on redeploy.
     private static final ThreadLocal<XMLOutputFactory> XML_OUTPUT_FACTORY =
             ThreadLocal.withInitial(XMLOutputFactory::newInstance);
 
     // One SAXParserFactory per thread — SAXParserFactory is not guaranteed thread-safe by JAXP.
     // Mirrors the XML_OUTPUT_FACTORY pattern used above.
+    // remove() is called after each use to prevent classloader leaks in servlet containers on redeploy.
     private static final ThreadLocal<SAXParserFactory> SAX_PARSER_FACTORY =
             ThreadLocal.withInitial(SAXParserFactory::newInstance);
 
@@ -120,6 +122,8 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
         } catch (Exception e) {
             throw new InvoicePdfGenerationException(
                     "Generated XML is not well-formed for invoice " + invoiceNumber + ": " + e.getMessage(), e);
+        } finally {
+            SAX_PARSER_FACTORY.remove();
         }
     }
 
@@ -232,6 +236,7 @@ public class InvoicePdfGenerationServiceImpl implements InvoicePdfGenerationServ
             try { writer.close(); } catch (Exception ex) {
                 log.debug("XMLStreamWriter.close() threw during cleanup (suppressed): {}", ex.getMessage());
             }
+            XML_OUTPUT_FACTORY.remove();
         }
 
         return sw.toString();

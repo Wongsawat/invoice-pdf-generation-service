@@ -157,8 +157,7 @@ public class SagaRouteConfig extends RouteBuilder {
             sagaCommandHandler.publishOrchestrationFailureForUnparsedMessage(
                     sagaId, sagaStep, correlationId, cause);
         } catch (Exception parseEx) {
-            log.error("DLQ: cannot parse raw message for saga metadata — orchestrator must timeout: {}",
-                    parseEx.getMessage());
+            log.error("DLQ: cannot parse raw message for saga metadata — orchestrator must timeout", parseEx);
         }
     }
 }
