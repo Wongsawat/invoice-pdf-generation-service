@@ -141,7 +141,7 @@ class SagaCommandHandlerTest {
     }
 
     @Test
-    @DisplayName("Retry below max: deleteById + beginGeneration + completeGenerationAndPublish")
+    @DisplayName("Retry below max: replaceAndBeginGeneration (atomic) + completeGenerationAndPublish")
     void handleProcessCommand_retryBelowMax() throws Exception {
         byte[] pdfBytes = new byte[1000];
         UUID failedId = UUID.randomUUID();
@@ -155,23 +155,27 @@ class SagaCommandHandlerTest {
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
-        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(newDoc);
+        when(pdfDocumentService.replaceAndBeginGeneration(eq(failedId), eq(1), anyString(), anyString()))
+                .thenReturn(newDoc);
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
-        verify(pdfDocumentService).deleteById(failedId);
-        verify(pdfDocumentService).beginGeneration("inv-001", "INV-2024-001");
+        // Single atomic call replaces deleteById + beginGeneration
+        verify(pdfDocumentService).replaceAndBeginGeneration(failedId, 1, "inv-001", "INV-2024-001");
+        verify(pdfDocumentService, never()).deleteById(any());
+        verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
         // previousRetryCount should be carried forward (failed.retryCount = 1)
         verify(pdfDocumentService).completeGenerationAndPublish(
                 eq(newDoc.getId()), any(), any(), anyLong(), eq(1), any());
     }
 
     @Test
-    @DisplayName("Retry carry-forward: previousRetryCount passed correctly to completeGenerationAndPublish")
+    @DisplayName("Retry carry-forward: previousRetryCount passed correctly to replaceAndBeginGeneration")
     void handleProcessCommand_retryCountCarriedForward() throws Exception {
         byte[] pdfBytes = new byte[1000];
+        UUID failedId = UUID.randomUUID();
         InvoicePdfDocument failed = InvoicePdfDocument.builder()
-                .id(UUID.randomUUID()).invoiceId("inv-001").invoiceNumber("INV-2024-001")
+                .id(failedId).invoiceId("inv-001").invoiceNumber("INV-2024-001")
                 .status(GenerationStatus.FAILED).retryCount(2).build();
         InvoicePdfDocument newDoc = generatingDoc();
 
@@ -180,11 +184,13 @@ class SagaCommandHandlerTest {
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
-        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(newDoc);
+        when(pdfDocumentService.replaceAndBeginGeneration(any(), eq(2), anyString(), anyString()))
+                .thenReturn(newDoc);
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
-        // previousRetryCount = 2 (from failed doc)
+        // previousRetryCount = 2 (from failed doc) is passed atomically to replaceAndBeginGeneration
+        verify(pdfDocumentService).replaceAndBeginGeneration(eq(failedId), eq(2), any(), any());
         verify(pdfDocumentService).completeGenerationAndPublish(
                 any(), any(), any(), anyLong(), eq(2), any());
     }
@@ -194,7 +200,7 @@ class SagaCommandHandlerTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("Stuck GENERATING (TX2 rolled back), retries below max → deleteById + beginGeneration + retry")
+    @DisplayName("Stuck GENERATING (TX2 rolled back), retries below max → replaceAndBeginGeneration (atomic) + retry")
     void handleProcessCommand_stuckGenerating_retriesNotExceeded() throws Exception {
         byte[] pdfBytes = new byte[1000];
         UUID stuckId = UUID.randomUUID();
@@ -208,12 +214,15 @@ class SagaCommandHandlerTest {
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
-        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(newDoc);
+        when(pdfDocumentService.replaceAndBeginGeneration(eq(stuckId), eq(1), anyString(), anyString()))
+                .thenReturn(newDoc);
 
         sagaCommandHandler.handleProcessCommand(processCommand());
 
-        verify(pdfDocumentService).deleteById(stuckId);
-        verify(pdfDocumentService).beginGeneration("inv-001", "INV-2024-001");
+        // Single atomic call replaces deleteById + beginGeneration
+        verify(pdfDocumentService).replaceAndBeginGeneration(stuckId, 1, "inv-001", "INV-2024-001");
+        verify(pdfDocumentService, never()).deleteById(any());
+        verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
         // previousRetryCount carried forward from the stuck document (retryCount = 1)
         verify(pdfDocumentService).completeGenerationAndPublish(
                 eq(newDoc.getId()), any(), any(), anyLong(), eq(1), any());
@@ -265,6 +274,20 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(cmd);
 
         verify(pdfDocumentService).publishGenerationFailure(any(), contains("invoiceNumber"));
+        verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
+        verifyNoInteractions(signedXmlFetchPort);
+    }
+
+    @Test
+    @DisplayName("Blank invoiceId → publishGenerationFailure before beginGeneration")
+    void handleProcessCommand_blankInvoiceId() {
+        ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(
+                "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
+                "doc-123", "   ", "INV-2024-001", SIGNED_XML_URL, "{}");
+
+        sagaCommandHandler.handleProcessCommand(cmd);
+
+        verify(pdfDocumentService).publishGenerationFailure(any(), contains("invoiceId"));
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
         verifyNoInteractions(signedXmlFetchPort);
     }
@@ -331,6 +354,85 @@ class SagaCommandHandlerTest {
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 eq(doc.getId()), contains("MinIO"), eq(-1), any());
+    }
+
+    @Test
+    @DisplayName("Upload succeeds but DB write fails → delete orphaned MinIO object + failGenerationAndPublish")
+    void handleProcessCommand_dbWriteFailsAfterUpload_deletesOrphanedObject() throws Exception {
+        InvoicePdfDocument doc = generatingDoc();
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
+        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(new byte[1000]);
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
+        when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
+        doThrow(new RuntimeException("DB connection lost"))
+                .when(pdfDocumentService).completeGenerationAndPublish(any(), any(), any(), anyLong(), anyInt(), any());
+
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfStoragePort).delete(S3_KEY);
+        verify(pdfDocumentService).failGenerationAndPublish(eq(doc.getId()), any(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("Upload succeeds, DB write fails, MinIO delete also fails → ORPHAN_PDF logged + failGenerationAndPublish")
+    void handleProcessCommand_dbWriteFailsAfterUpload_minioDeleteAlsoFails() throws Exception {
+        InvoicePdfDocument doc = generatingDoc();
+        when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
+        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString())).thenReturn(new byte[1000]);
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
+        when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
+        doThrow(new RuntimeException("DB connection lost"))
+                .when(pdfDocumentService).completeGenerationAndPublish(any(), any(), any(), anyLong(), anyInt(), any());
+        doThrow(new RuntimeException("MinIO also down")).when(pdfStoragePort).delete(anyString());
+
+        // Should not propagate — both errors are logged; failGenerationAndPublish still called
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfStoragePort).delete(S3_KEY);
+        verify(pdfDocumentService).failGenerationAndPublish(eq(doc.getId()), any(), anyInt(), any());
+    }
+
+    @Test
+    @DisplayName("Unexpected exception in outer handler → publishGenerationFailure called")
+    void handleProcessCommand_unexpectedExceptionInOuterBlock_publishesFailure() {
+        when(pdfDocumentService.findByInvoiceId("inv-001"))
+                .thenThrow(new RuntimeException("Unexpected infrastructure failure"));
+
+        sagaCommandHandler.handleProcessCommand(processCommand());
+
+        verify(pdfDocumentService).publishGenerationFailure(
+                any(), contains("Unexpected infrastructure failure"));
+    }
+
+    // -------------------------------------------------------------------------
+    // publishCompensationOrchestrationFailure
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("publishCompensationOrchestrationFailure: publishes FAILURE reply citing retry exhaustion")
+    void publishCompensationOrchestrationFailure_publishesFailure() {
+        sagaCommandHandler.publishCompensationOrchestrationFailure(
+                compensateCommand(), new RuntimeException("compensation blew up"));
+
+        verify(sagaReplyPort).publishFailure(
+                eq("saga-001"), eq(SagaStep.GENERATE_INVOICE_PDF),
+                eq("corr-456"),
+                contains("retry exhaustion"));
+    }
+
+    @Test
+    @DisplayName("publishCompensationOrchestrationFailure: swallows port exception so DLQ routing continues")
+    void publishCompensationOrchestrationFailure_sagaReplyThrows_doesNotPropagate() {
+        doThrow(new RuntimeException("outbox write failed"))
+                .when(sagaReplyPort).publishFailure(anyString(), any(), anyString(), anyString());
+
+        sagaCommandHandler.publishCompensationOrchestrationFailure(
+                compensateCommand(), new RuntimeException("cause"));
+        // No assertion needed: propagation would fail the test
     }
 
     // -------------------------------------------------------------------------

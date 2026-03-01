@@ -153,6 +153,18 @@ class RestTemplateSignedXmlFetcherTest {
     }
 
     @Test
+    void fetch_172_nonNumericOctet_notTreatedAsPrivateIp() {
+        // "172.abc.example.com" starts with "172." but the second label is non-numeric, so
+        // NumberFormatException is caught inside isPrivateIpLiteral → returns false → not a private IP.
+        // DNS resolution then fails (unknown host) → warning logged → fetch proceeds normally.
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "172.abc.example.com");
+        String url = "http://172.abc.example.com:9000/invoices/signed.xml";
+        when(restTemplate.getForObject(url, String.class)).thenReturn("<invoice/>");
+
+        assertThat(fetcher.fetch(url)).isEqualTo("<invoice/>");
+    }
+
+    @Test
     void fetch_172_16_ipLiteralInAllowlist_stillRejected() {
         var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "172.16.0.1");
 
@@ -211,5 +223,17 @@ class RestTemplateSignedXmlFetcherTest {
                 .isInstanceOf(SignedXmlFetchException.class)
                 .hasMessageContaining("Network error")
                 .hasMessageContaining("Connection timed out");
+    }
+
+    @Test
+    void fetch_unresolvableAllowedHost_logsWarningAndProceedsToFetch() {
+        // The .invalid TLD (RFC 2606) is guaranteed to never resolve in DNS.
+        // DNS rebinding check catches UnknownHostException → logs warning → proceeds.
+        var fetcher = new RestTemplateSignedXmlFetcher(restTemplate, "no-such-host.invalid");
+        String url = "http://no-such-host.invalid:9000/invoices/signed.xml";
+        when(restTemplate.getForObject(url, String.class)).thenReturn("<invoice/>");
+
+        // Should not throw — resolution failure is treated as a warning, not a rejection
+        assertThat(fetcher.fetch(url)).isEqualTo("<invoice/>");
     }
 }

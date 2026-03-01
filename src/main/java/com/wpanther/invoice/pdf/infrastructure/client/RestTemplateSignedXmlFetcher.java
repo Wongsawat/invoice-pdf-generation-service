@@ -9,6 +9,7 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.InetAddress;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Set;
@@ -129,6 +130,31 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
             if (isPrivateIpLiteral(host)) {
                 throw new SignedXmlFetchException(
                         "Rejected URL with private IP literal: " + host + ". Use a hostname instead.");
+            }
+
+            // DNS rebinding protection: resolve the hostname and reject if it maps to a
+            // private IP address. An attacker who controls DNS for an allowlisted external
+            // name could re-point it to internal infrastructure after the allowlist check.
+            // 'localhost' is excluded — it always maps to loopback in any JVM and the
+            // rebinding attack targets external names, not loopback aliases.
+            // If DNS resolution fails (e.g. in unit-test environments without network),
+            // a warning is logged and the request proceeds; the connection will fail at the
+            // network layer with a clear error.
+            if (!host.equalsIgnoreCase("localhost")) {
+                try {
+                    String resolvedIp = InetAddress.getByName(host).getHostAddress();
+                    if (isPrivateIpLiteral(resolvedIp)) {
+                        throw new SignedXmlFetchException(
+                                "Rejected URL: host '" + host + "' resolves to private IP '"
+                                + resolvedIp + "' (DNS rebinding protection). "
+                                + "Use an external, publicly-routable hostname.");
+                    }
+                } catch (SignedXmlFetchException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.warn("DNS rebinding check: could not resolve host '{}': {} — proceeding with fetch",
+                            host, e.getMessage());
+                }
             }
         } catch (SignedXmlFetchException e) {
             throw e;

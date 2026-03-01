@@ -171,8 +171,14 @@ public class FopInvoicePdfGenerator {
             log.error("Failed to generate PDF", e);
             throw new PdfGenerationException("PDF generation failed: " + e.getMessage(), e);
         } finally {
-            renderTimer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
-            renderSemaphore.release();
+            // Nested finally: record the timer first, then always release the permit.
+            // If record() itself throws (e.g. Micrometer backend unavailable), the
+            // release() must still run — otherwise the permit leaks and FOP halts.
+            try {
+                renderTimer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
+            } finally {
+                renderSemaphore.release();
+            }
         }
     }
 

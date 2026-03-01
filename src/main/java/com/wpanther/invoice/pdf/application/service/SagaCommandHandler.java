@@ -110,6 +110,12 @@ public class SagaCommandHandler {
                     return;
                 }
 
+                // Compute previousRetryCount before any mutation so it is available in
+                // both the retry branch (where we pass it to replaceAndBeginGeneration)
+                // and in TX2 (completeGenerationAndPublish / failGenerationAndPublish).
+                int previousRetryCount =
+                        existing.map(InvoicePdfDocument::getRetryCount).orElse(-1);
+
                 // Retry limit check — handles FAILED and stuck GENERATING states.
                 // A document can be left in GENERATING when TX2 (completeGenerationAndPublish /
                 // failGenerationAndPublish) rolls back.  Without this branch the next re-delivery
@@ -126,15 +132,18 @@ public class SagaCommandHandler {
                         pdfDocumentService.publishRetryExhausted(command);
                         return;
                     }
-                    // Delete the prior record; flush enforces DELETE-before-INSERT ordering
-                    pdfDocumentService.deleteById(prior.getId());
                 }
 
                 // ── Short tx 1: create PENDING → GENERATING record ──────────────────
-                InvoicePdfDocument document = pdfDocumentService.beginGeneration(
-                        invoiceId, invoiceNumber);
-                int previousRetryCount =
-                        existing.map(InvoicePdfDocument::getRetryCount).orElse(-1);
+                // Retry path: replace atomically (single tx: delete + flush + insert) so the
+                // retry count is never lost to a crash between two separate transactions.
+                InvoicePdfDocument document;
+                if (existing.isPresent()) {
+                    document = pdfDocumentService.replaceAndBeginGeneration(
+                            existing.get().getId(), previousRetryCount, invoiceId, invoiceNumber);
+                } else {
+                    document = pdfDocumentService.beginGeneration(invoiceId, invoiceNumber);
+                }
                 // ── Transaction committed ────────────────────────────────────────────
 
                 String s3Key = null;

@@ -253,6 +253,27 @@ class InvoicePdfDocumentServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // replaceAndBeginGeneration
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("replaceAndBeginGeneration() deletes, flushes, creates GENERATING doc with advanced retry count")
+    void replaceAndBeginGeneration_deletesAndCreatesNewDocument() {
+        UUID existingId = UUID.randomUUID();
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        InvoicePdfDocument result = service.replaceAndBeginGeneration(existingId, 1, "inv-001", "INV-001");
+
+        verify(repository).deleteById(existingId);
+        verify(repository).flush();
+        verify(repository).save(any());
+        assertThat(result.getStatus()).isEqualTo(GenerationStatus.GENERATING);
+        assertThat(result.getRetryCount()).isEqualTo(2); // previousRetryCount(1) + 1
+        assertThat(result.getInvoiceId()).isEqualTo("inv-001");
+        assertThat(result.getInvoiceNumber()).isEqualTo("INV-001");
+    }
+
+    // -------------------------------------------------------------------------
     // deleteById
     // -------------------------------------------------------------------------
 

@@ -3,6 +3,10 @@ package com.wpanther.invoice.pdf.infrastructure.config;
 import com.wpanther.invoice.pdf.infrastructure.persistence.outbox.JpaOutboxEventRepository;
 import com.wpanther.invoice.pdf.infrastructure.persistence.outbox.SpringDataOutboxRepository;
 import com.wpanther.saga.domain.outbox.OutboxEventRepository;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -35,9 +39,17 @@ public class OutboxConfig {
             throw new IllegalStateException(
                     "app.rest-client.read-timeout must be > 0, got: " + readTimeout);
         }
-        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
-        factory.setConnectTimeout(connectTimeout);
-        factory.setConnectionRequestTimeout(readTimeout);
-        return new RestTemplate(factory);
+        // HC5: setConnectTimeout  → TCP connection establishment
+        //      setConnectionRequestTimeout → pool-borrow timeout (use connectTimeout, not readTimeout)
+        //      setResponseTimeout  → socket read / server response timeout (the "read timeout")
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(Timeout.ofMilliseconds(connectTimeout))
+                .setConnectionRequestTimeout(Timeout.ofMilliseconds(connectTimeout))
+                .setResponseTimeout(Timeout.ofMilliseconds(readTimeout))
+                .build();
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .build();
+        return new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient));
     }
 }

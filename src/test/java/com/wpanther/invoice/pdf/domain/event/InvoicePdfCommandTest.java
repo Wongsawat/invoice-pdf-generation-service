@@ -50,6 +50,16 @@ class InvoicePdfCommandTest {
     }
 
     @Test
+    @DisplayName("ProcessInvoicePdfCommand rejects null invoiceDataJson")
+    void processCommand_nullInvoiceDataJson_throwsNullPointerException() {
+        assertThatThrownBy(() ->
+                new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
+                        "doc-1", "inv-001", "INV-001", "http://localhost/signed.xml", null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("invoiceDataJson");
+    }
+
+    @Test
     @DisplayName("ProcessInvoicePdfCommand accepts valid arguments")
     void processCommand_validArgs_constructsSuccessfully() {
         ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(

@@ -8,8 +8,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -74,7 +72,11 @@ public class InvoicePdfDocumentEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    @CreationTimestamp
+    // createdAt is mapped explicitly from the domain model via toEntity().
+    // InvoicePdfDocument.Builder defaults to LocalDateTime.now() when not set,
+    // so this field is always non-null on first persist.
+    // @CreationTimestamp was removed: it would silently overwrite the domain-supplied
+    // value on every INSERT, making round-trip timestamps unreliable.
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

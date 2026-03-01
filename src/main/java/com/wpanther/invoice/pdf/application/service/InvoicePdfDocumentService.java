@@ -66,6 +66,37 @@ public class InvoicePdfDocumentService {
     }
 
     /**
+     * Atomic replace-and-begin: delete the prior failed/stuck document, flush to enforce
+     * DELETE-before-INSERT on the unique {@code invoice_id} key, then create a new
+     * PENDING → GENERATING record — all within a <em>single</em> transaction.
+     *
+     * <p>Performing these three operations atomically eliminates the crash window that
+     * exists when {@code deleteById} and {@code beginGeneration} are called as separate
+     * transactions: a JVM crash between those two commits would lose the retry count
+     * from the prior document, causing the saga to retry more times than configured.
+     *
+     * @param existingId        the id of the document to delete
+     * @param previousRetryCount the retry count from the document being replaced
+     * @param invoiceId         the invoice identifier
+     * @param invoiceNumber     the invoice number
+     * @return the new GENERATING document with the advanced retry count
+     */
+    @Transactional
+    public InvoicePdfDocument replaceAndBeginGeneration(
+            UUID existingId, int previousRetryCount, String invoiceId, String invoiceNumber) {
+        log.info("Replacing PDF document {} and initiating new generation for invoice: {}", existingId, invoiceNumber);
+        repository.deleteById(existingId);
+        repository.flush();
+        InvoicePdfDocument document = InvoicePdfDocument.builder()
+                .invoiceId(invoiceId)
+                .invoiceNumber(invoiceNumber)
+                .build();
+        document.startGeneration();
+        document.incrementRetryCountTo(previousRetryCount + 1);
+        return repository.save(document);
+    }
+
+    /**
      * Phase 3 (success path): mark COMPLETED and atomically write both the
      * pdf-generated notification event and the SUCCESS saga reply to the outbox.
      * DB connection is held only for these writes — PDF bytes are already uploaded.
