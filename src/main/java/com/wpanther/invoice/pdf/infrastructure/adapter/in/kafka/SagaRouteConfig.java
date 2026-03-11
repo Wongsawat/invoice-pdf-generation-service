@@ -104,10 +104,10 @@ public class SagaRouteConfig extends RouteBuilder {
                         .log(LoggingLevel.DEBUG, "Received saga command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
                         .unmarshal().json(JsonLibrary.Jackson, KafkaProcessInvoicePdfCommand.class)
                         .process(exchange -> {
-                                KafkaProcessInvoicePdfCommand raw = exchange.getIn().getBody(KafkaProcessInvoicePdfCommand.class);
+                                KafkaProcessInvoicePdfCommand cmd = exchange.getIn().getBody(KafkaProcessInvoicePdfCommand.class);
                                 log.info("Processing saga command for saga: {}, invoice: {}",
-                                                raw.getSagaId(), raw.getInvoiceNumber());
-                                processUseCase.handle(commandMapper.toProcess(raw));
+                                                cmd.getSagaId(), cmd.getInvoiceNumber());
+                                processUseCase.handle(commandMapper.toProcess(cmd));
                         })
                         .log("Successfully processed saga command");
 
@@ -126,10 +126,10 @@ public class SagaRouteConfig extends RouteBuilder {
                         .log(LoggingLevel.DEBUG, "Received compensation command from Kafka: partition=${header[kafka.PARTITION]}, offset=${header[kafka.OFFSET]}")
                         .unmarshal().json(JsonLibrary.Jackson, KafkaCompensateInvoicePdfCommand.class)
                         .process(exchange -> {
-                                KafkaCompensateInvoicePdfCommand raw = exchange.getIn().getBody(KafkaCompensateInvoicePdfCommand.class);
+                                KafkaCompensateInvoicePdfCommand cmd = exchange.getIn().getBody(KafkaCompensateInvoicePdfCommand.class);
                                 log.info("Processing compensation for saga: {}, invoice: {}",
-                                                raw.getSagaId(), raw.getInvoiceId());
-                                compensateUseCase.handle(commandMapper.toCompensate(raw));
+                                                cmd.getSagaId(), cmd.getInvoiceId());
+                                compensateUseCase.handle(commandMapper.toCompensate(cmd));
                         })
                         .log("Successfully processed compensation command");
     }
