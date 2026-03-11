@@ -97,7 +97,7 @@ public class SagaRouteConfig extends RouteBuilder {
                                 ProcessInvoicePdfCommand cmd = exchange.getIn().getBody(ProcessInvoicePdfCommand.class);
                                 log.info("Processing saga command for saga: {}, invoice: {}",
                                                 cmd.getSagaId(), cmd.getInvoiceNumber());
-                                sagaCommandHandler.handleProcessCommand(cmd);
+                                sagaCommandHandler.handle(cmd);
                         })
                         .log("Successfully processed saga command");
 
@@ -119,7 +119,7 @@ public class SagaRouteConfig extends RouteBuilder {
                                 CompensateInvoicePdfCommand cmd = exchange.getIn().getBody(CompensateInvoicePdfCommand.class);
                                 log.info("Processing compensation for saga: {}, invoice: {}",
                                                 cmd.getSagaId(), cmd.getInvoiceId());
-                                sagaCommandHandler.handleCompensation(cmd);
+                                sagaCommandHandler.handle(cmd);
                         })
                         .log("Successfully processed compensation command");
     }
