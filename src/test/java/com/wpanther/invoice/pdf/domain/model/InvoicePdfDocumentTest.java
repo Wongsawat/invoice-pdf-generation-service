@@ -1,5 +1,6 @@
 package com.wpanther.invoice.pdf.domain.model;
 
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +43,7 @@ class InvoicePdfDocumentTest {
                         .invoiceId("   ")
                         .invoiceNumber("INV-001")
                         .build()
-        ).isInstanceOf(IllegalStateException.class)
+        ).isInstanceOf(InvoicePdfGenerationException.class)
          .hasMessageContaining("Invoice ID cannot be blank");
     }
 
@@ -129,7 +130,7 @@ class InvoicePdfDocumentTest {
         doc.startGeneration();
 
         assertThatThrownBy(doc::startGeneration)
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(InvoicePdfGenerationException.class)
                 .hasMessageContaining("PENDING");
     }
 
@@ -139,7 +140,7 @@ class InvoicePdfDocumentTest {
         InvoicePdfDocument doc = pendingDocument();
 
         assertThatThrownBy(() -> doc.markCompleted("path", "url", 100L, LocalDateTime.now()))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(InvoicePdfGenerationException.class)
                 .hasMessageContaining("GENERATING");
     }
 
@@ -185,7 +186,7 @@ class InvoicePdfDocumentTest {
         doc.markCompleted("path", "url", 100L, LocalDateTime.now());
 
         assertThatThrownBy(() -> doc.markFailed("late failure", LocalDateTime.now()))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(InvoicePdfGenerationException.class)
                 .hasMessageContaining("COMPLETED");
     }
 
