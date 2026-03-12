@@ -103,11 +103,11 @@ class KafkaCommandClassesTest {
     }
 
     @Test
-    @DisplayName("KafkaCommandMapper handles various inputs correctly")
-    void kafkaCommandMapper_handlesVariousInputs() {
+    @DisplayName("KafkaCommandMapper preserves all command fields during mapping")
+    void kafkaCommandMapper_preservesAllFields() {
         KafkaCommandMapper mapper = new KafkaCommandMapper();
 
-        // Test with typical inputs
+        // Test process command with all fields
         KafkaProcessInvoicePdfCommand kafkaProcess = new KafkaProcessInvoicePdfCommand(
                 java.util.UUID.randomUUID(),
                 Instant.now(),
@@ -120,16 +120,18 @@ class KafkaCommandClassesTest {
                 "inv-002",
                 "INV-2025-001",
                 "http://minio/signed/invoice2.xml",
-                "{\"amount\":1000}"
+                "{\"amount\":1000,\"currency\":\"THB\"}"
         );
 
         var domainProcess = mapper.toProcess(kafkaProcess);
         assertThat(domainProcess).isNotNull();
         assertThat(domainProcess.getSagaId()).isEqualTo("saga-456");
         assertThat(domainProcess.getInvoiceId()).isEqualTo("inv-002");
-        assertThat(domainProcess.getCorrelationId()).isEqualTo("corr-789");
+        assertThat(domainProcess.getInvoiceNumber()).isEqualTo("INV-2025-001");
+        assertThat(domainProcess.getSignedXmlUrl()).isEqualTo("http://minio/signed/invoice2.xml");
+        assertThat(domainProcess.getInvoiceDataJson()).isEqualTo("{\"amount\":1000,\"currency\":\"THB\"}");
 
-        // Test compensate
+        // Test compensate command
         KafkaCompensateInvoicePdfCommand kafkaCompensate = new KafkaCompensateInvoicePdfCommand(
                 java.util.UUID.randomUUID(),
                 Instant.now(),
@@ -146,5 +148,6 @@ class KafkaCommandClassesTest {
         assertThat(domainCompensate).isNotNull();
         assertThat(domainCompensate.getSagaId()).isEqualTo("saga-456");
         assertThat(domainCompensate.getInvoiceId()).isEqualTo("inv-002");
+        assertThat(domainCompensate.getDocumentId()).isEqualTo("doc-111");
     }
 }

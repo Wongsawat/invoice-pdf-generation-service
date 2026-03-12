@@ -301,4 +301,87 @@ test/java/com/wpanther/invoice/pdf/
 | Moved + renamed | 4 (`ProcessInvoicePdfCommand` → `KafkaProcessInvoicePdfCommand`, `CompensateInvoicePdfCommand` → `KafkaCompensateInvoicePdfCommand`, `InvoicePdfReplyEvent`, `InvoicePdfGeneratedEvent`) |
 | Moved only (no logic change) | ~15 (all infrastructure classes) |
 | Import updates only | ~8 (application services, test classes) |
+
+---
+
+## Package Naming Conventions
+
+### Port Locations
+
+**Inbound Ports (Driving Adapters):** `application/usecase/`
+- Use-case interfaces define the "driving side" of the hexagon
+- Examples: `ProcessInvoicePdfUseCase`, `CompensateInvoicePdfUseCase`
+- These are implemented by application services (e.g., `SagaCommandHandler`)
+
+**Outbound Ports (Driven Adapters):** `application/port/out/`
+- Port interfaces for dependencies that the application needs from the outside world
+- Examples: `PdfStoragePort`, `SagaReplyPort`, `SignedXmlFetchPort`
+
+**Domain-Owned Outbound Ports:** `domain/repository/`
+- Repository interfaces that belong to the domain ubiquitous language
+- Example: `InvoicePdfDocumentRepository` (stays in `domain/repository/`)
+
+### Adapter Locations
+
+**Inbound Adapters:** `infrastructure/adapter/in/`
+- External systems that drive our application
+- Examples: Kafka consumers (`kafka/`), REST controllers (not present in this service)
+
+**Outbound Adapters:** `infrastructure/adapter/out/`
+- Implementations that our application uses to interact with the outside world
+- Organized by technology/purpose:
+  - `client/` - External HTTP clients
+  - `messaging/` - Outbound messaging (Kafka producers via outbox)
+  - `pdf/` - PDF generation libraries
+  - `persistence/` - Database adapters
+  - `storage/` - Object storage adapters
+
+**Configuration:** `infrastructure/config/`
+- Spring `@Configuration` classes for bean definitions
+- Only bean factories and wiring — no business logic
+
+### Summary Diagram
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         Kafka Topic               │
+                    └─────────────────────────────────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────────────────┐
+                    │  adapter/in/kafka/                  │  Inbound
+                    │  - SagaRouteConfig                 │  Adapter
+                    │  - Kafka*Command (wire DTOs)       │
+                    │  - KafkaCommandMapper              │
+                    └──────────────────────────────────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────────────────┐
+                    │  application/usecase/               │  Inbound
+                    │  - ProcessInvoicePdfUseCase         │  Port
+                    │  - CompensateInvoicePdfUseCase      │
+                    └──────────────────────────────────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────────────────┐
+                    │  application/service/                │
+                    │  - SagaCommandHandler               │
+                    └──────────────────────────────────────┘
+            ┌───────────────────────┼───────────────────────┐
+            ▼                       ▼                       ▼
+    ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+    │ port/out/       │   │ domain/          │   │ port/out/       │
+    │ - PdfStoragePort│   │ - model/         │   │ - SagaReplyPort │
+    │ - SignedXmlFetch│   │ - repository/    │   │                 │
+    │                  │   │ - service/       │   │                 │
+    └──────────────────┘   └──────────────────┘   └──────────────────┘
+            │                       │                       │
+            ▼                       ▼                       ▼
+    ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+    │ adapter/out/     │   │ (domain stays    │   │ adapter/out/     │
+    │ - storage/       │   │  pure - no       │   │ - messaging/     │
+    │ - client/        │   │  imports)        │   │                 │
+    │                  │   │                  │   │                 │
+    └──────────────────┘   └──────────────────┘   └──────────────────┘
+```
 | Deleted packages | `domain/event/`, `infrastructure/persistence/`, `infrastructure/messaging/`, `infrastructure/storage/`, `infrastructure/client/`, `infrastructure/pdf/`, `infrastructure/config/SagaRouteConfig` |

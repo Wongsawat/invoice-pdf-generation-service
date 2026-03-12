@@ -1,7 +1,7 @@
 package com.wpanther.invoice.pdf.infrastructure.adapter.out.pdf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService.InvoicePdfGenerationException;
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

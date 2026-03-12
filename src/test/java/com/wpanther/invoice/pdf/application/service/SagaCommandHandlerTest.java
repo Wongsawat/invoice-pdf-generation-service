@@ -7,6 +7,7 @@ import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import com.wpanther.saga.domain.enums.SagaStep;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -330,7 +331,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
-                .thenThrow(new InvoicePdfGenerationService.InvoicePdfGenerationException("FOP failed"));
+                .thenThrow(new InvoicePdfGenerationException("FOP failed"));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
 
         sagaCommandHandler.handle(processCommand());
