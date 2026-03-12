@@ -3,10 +3,12 @@ package com.wpanther.invoice.pdf.application.service;
 import com.wpanther.invoice.pdf.application.port.out.PdfStoragePort;
 import com.wpanther.invoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort;
-import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
-import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
+import com.wpanther.invoice.pdf.application.usecase.CompensateInvoicePdfUseCase;
+import com.wpanther.invoice.pdf.application.usecase.ProcessInvoicePdfUseCase;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
+import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
+import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.saga.domain.enums.SagaStep;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +39,7 @@ import java.util.Optional;
  */
 @Service
 @Slf4j
-public class SagaCommandHandler {
+public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateInvoicePdfUseCase {
 
     // MDC key constants — prevents typos in structured log fields
     private static final String MDC_SAGA_ID         = "sagaId";
@@ -71,7 +73,8 @@ public class SagaCommandHandler {
      * No {@code @Transactional} — DB work is performed in short, focused transactions
      * via {@link InvoicePdfDocumentService}.
      */
-    public void handleProcessCommand(ProcessInvoicePdfCommand command) {
+    @Override
+    public void handle(ProcessInvoicePdfCommand command) {
         MDC.put(MDC_SAGA_ID,        command.getSagaId());
         MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
         MDC.put(MDC_INVOICE_NUMBER, command.getInvoiceNumber());
@@ -223,7 +226,8 @@ public class SagaCommandHandler {
      * No {@code @Transactional} — DB delete and MinIO delete run independently so neither
      * holds an open transaction during network I/O.
      */
-    public void handleCompensation(CompensateInvoicePdfCommand command) {
+    @Override
+    public void handle(CompensateInvoicePdfCommand command) {
         MDC.put(MDC_SAGA_ID,        command.getSagaId());
         MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
         MDC.put(MDC_INVOICE_ID,     command.getInvoiceId());

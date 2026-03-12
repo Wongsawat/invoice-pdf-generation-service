@@ -1,5 +1,7 @@
 package com.wpanther.invoice.pdf.domain.service;
 
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
+
 /**
  * Domain service for Invoice PDF generation
  */
@@ -16,17 +18,4 @@ public interface InvoicePdfGenerationService {
      */
     byte[] generatePdf(String invoiceNumber, String xmlContent, String invoiceDataJson)
         throws InvoicePdfGenerationException;
-
-    /**
-     * Exception thrown when PDF generation fails
-     */
-    class InvoicePdfGenerationException extends Exception {
-        public InvoicePdfGenerationException(String message) {
-            super(message);
-        }
-
-        public InvoicePdfGenerationException(String message, Throwable cause) {
-            super(message, cause);
-        }
-    }
 }

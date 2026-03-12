@@ -346,10 +346,10 @@
                                 <!-- Spring @Configuration wiring — exercised by context load, not meaningful to unit-test -->
                                 <exclude>com/wpanther/invoice/pdf/infrastructure/config/OutboxConfig.class</exclude>
                                 <exclude>com/wpanther/invoice/pdf/infrastructure/config/MinioConfig.class</exclude>
-                                <!-- Camel RouteBuilder — lambda bodies only execute when messages arrive (runtime-only) -->
-                                <exclude>com/wpanther/invoice/pdf/infrastructure/config/SagaRouteConfig.class</exclude>
+                                <!-- Kafka adapter classes - wire-format DTOs tested via integration tests -->
+                                <exclude>com/wpanther/invoice/pdf/infrastructure/adapter/in/kafka/*.class</exclude>
                                 <!-- Spring Data interface — no bytecode to instrument -->
-                                <exclude>com/wpanther/invoice/pdf/infrastructure/persistence/outbox/SpringDataOutboxRepository.class</exclude>
+                                <exclude>com/wpanther/invoice/pdf/infrastructure/adapter/out/persistence/outbox/SpringDataOutboxRepository.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>

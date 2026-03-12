@@ -1,5 +1,7 @@
 package com.wpanther.invoice.pdf.domain.model;
 
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
+
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -68,11 +70,11 @@ public class InvoicePdfDocument {
      */
     private void validateInvariant() {
         if (invoiceId.isBlank()) {
-            throw new IllegalStateException("Invoice ID cannot be blank");
+            throw new InvoicePdfGenerationException(InvoicePdfGenerationException.ErrorCode.INVALID_INPUT, "Invoice ID cannot be blank");
         }
 
         if (invoiceNumber.isBlank()) {
-            throw new IllegalStateException("Invoice number cannot be blank");
+            throw new InvoicePdfGenerationException(InvoicePdfGenerationException.ErrorCode.INVALID_INPUT, "Invoice number cannot be blank");
         }
     }
 
@@ -81,7 +83,7 @@ public class InvoicePdfDocument {
      */
     public void startGeneration() {
         if (this.status != GenerationStatus.PENDING) {
-            throw new IllegalStateException("Can only start generation from PENDING status");
+            throw new InvoicePdfGenerationException(InvoicePdfGenerationException.ErrorCode.INVALID_STATE, "Can only start generation from PENDING status");
         }
         this.status = GenerationStatus.GENERATING;
     }
@@ -91,7 +93,7 @@ public class InvoicePdfDocument {
      */
     public void markCompleted(String documentPath, String documentUrl, long fileSize, LocalDateTime completedAt) {
         if (this.status != GenerationStatus.GENERATING) {
-            throw new IllegalStateException("Can only complete from GENERATING status");
+            throw new InvoicePdfGenerationException(InvoicePdfGenerationException.ErrorCode.INVALID_STATE, "Can only complete from GENERATING status");
         }
 
         Objects.requireNonNull(documentPath, "Document path is required");
@@ -113,7 +115,7 @@ public class InvoicePdfDocument {
      */
     public void markFailed(String errorMessage, LocalDateTime failedAt) {
         if (this.status == GenerationStatus.COMPLETED) {
-            throw new IllegalStateException("Cannot mark a COMPLETED document as failed");
+            throw new InvoicePdfGenerationException(InvoicePdfGenerationException.ErrorCode.INVALID_STATE, "Cannot mark a COMPLETED document as failed");
         }
         this.status = GenerationStatus.FAILED;
         this.errorMessage = errorMessage;

@@ -7,6 +7,7 @@ import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.invoice.pdf.domain.model.InvoicePdfDocument;
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import com.wpanther.saga.domain.enums.SagaStep;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -96,7 +97,7 @@ class SagaCommandHandlerTest {
         when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
         when(pdfDocumentService.beginGeneration("inv-001", "INV-2024-001")).thenReturn(doc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).beginGeneration("inv-001", "INV-2024-001");
         verify(pdfGenerationService).generatePdf("INV-2024-001", SIGNED_XML_CONTENT, "{}");
@@ -114,7 +115,7 @@ class SagaCommandHandlerTest {
     void handleProcessCommand_alreadyCompleted() throws Exception {
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(completedDoc()));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).publishIdempotentSuccess(any(), any());
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
@@ -133,7 +134,7 @@ class SagaCommandHandlerTest {
                 .status(GenerationStatus.FAILED).retryCount(3).build();
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(failed));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).publishRetryExhausted(any());
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
@@ -158,7 +159,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.replaceAndBeginGeneration(eq(failedId), eq(1), anyString(), anyString()))
                 .thenReturn(newDoc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         // Single atomic call replaces deleteById + beginGeneration
         verify(pdfDocumentService).replaceAndBeginGeneration(failedId, 1, "inv-001", "INV-2024-001");
@@ -187,7 +188,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.replaceAndBeginGeneration(any(), eq(2), anyString(), anyString()))
                 .thenReturn(newDoc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         // previousRetryCount = 2 (from failed doc) is passed atomically to replaceAndBeginGeneration
         verify(pdfDocumentService).replaceAndBeginGeneration(eq(failedId), eq(2), any(), any());
@@ -217,7 +218,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.replaceAndBeginGeneration(eq(stuckId), eq(1), anyString(), anyString()))
                 .thenReturn(newDoc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         // Single atomic call replaces deleteById + beginGeneration
         verify(pdfDocumentService).replaceAndBeginGeneration(stuckId, 1, "inv-001", "INV-2024-001");
@@ -237,7 +238,7 @@ class SagaCommandHandlerTest {
                 .status(GenerationStatus.GENERATING).retryCount(3).build();
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(stuck));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).publishRetryExhausted(any());
         verify(pdfDocumentService, never()).deleteById(any());
@@ -258,7 +259,7 @@ class SagaCommandHandlerTest {
                 .thenThrow(new SignedXmlFetchPort.SignedXmlFetchException(
                         "Failed to download signed XML from " + SIGNED_XML_URL));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 any(), contains("Failed to download signed XML"), anyInt(), any());
@@ -271,7 +272,7 @@ class SagaCommandHandlerTest {
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
                 "doc-123", "inv-001", "   ", SIGNED_XML_URL, "{}");
 
-        sagaCommandHandler.handleProcessCommand(cmd);
+        sagaCommandHandler.handle(cmd);
 
         verify(pdfDocumentService).publishGenerationFailure(any(), contains("invoiceNumber"));
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
@@ -285,7 +286,7 @@ class SagaCommandHandlerTest {
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
                 "doc-123", "   ", "INV-2024-001", SIGNED_XML_URL, "{}");
 
-        sagaCommandHandler.handleProcessCommand(cmd);
+        sagaCommandHandler.handle(cmd);
 
         verify(pdfDocumentService).publishGenerationFailure(any(), contains("invoiceId"));
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
@@ -299,7 +300,7 @@ class SagaCommandHandlerTest {
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
                 "doc-123", "inv-001", "INV-2024-001", "  ", "{}");
 
-        sagaCommandHandler.handleProcessCommand(cmd);
+        sagaCommandHandler.handle(cmd);
 
         verify(pdfDocumentService).publishGenerationFailure(any(), contains("signedXmlUrl"));
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
@@ -317,7 +318,7 @@ class SagaCommandHandlerTest {
                         new RuntimeException("Connection refused")));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 eq(doc.getId()), contains("Failed to download signed XML"), eq(-1), any());
@@ -330,10 +331,10 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
-                .thenThrow(new InvoicePdfGenerationService.InvoicePdfGenerationException("FOP failed"));
+                .thenThrow(new InvoicePdfGenerationException("FOP failed"));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 eq(doc.getId()), contains("FOP failed"), eq(-1), any());
@@ -350,7 +351,7 @@ class SagaCommandHandlerTest {
         when(pdfStoragePort.store(anyString(), any())).thenThrow(new RuntimeException("MinIO unavailable"));
         when(pdfDocumentService.beginGeneration(anyString(), anyString())).thenReturn(doc);
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 eq(doc.getId()), contains("MinIO"), eq(-1), any());
@@ -369,7 +370,7 @@ class SagaCommandHandlerTest {
         doThrow(new RuntimeException("DB connection lost"))
                 .when(pdfDocumentService).completeGenerationAndPublish(any(), any(), any(), anyLong(), anyInt(), any());
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfStoragePort).delete(S3_KEY);
         verify(pdfDocumentService).failGenerationAndPublish(eq(doc.getId()), any(), anyInt(), any());
@@ -390,7 +391,7 @@ class SagaCommandHandlerTest {
         doThrow(new RuntimeException("MinIO also down")).when(pdfStoragePort).delete(anyString());
 
         // Should not propagate — both errors are logged; failGenerationAndPublish still called
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfStoragePort).delete(S3_KEY);
         verify(pdfDocumentService).failGenerationAndPublish(eq(doc.getId()), any(), anyInt(), any());
@@ -402,7 +403,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.findByInvoiceId("inv-001"))
                 .thenThrow(new RuntimeException("Unexpected infrastructure failure"));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).publishGenerationFailure(
                 any(), contains("Unexpected infrastructure failure"));
@@ -445,7 +446,7 @@ class SagaCommandHandlerTest {
         InvoicePdfDocument doc = completedDoc();
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
 
-        sagaCommandHandler.handleCompensation(compensateCommand());
+        sagaCommandHandler.handle(compensateCommand());
 
         verify(pdfDocumentService).deleteById(doc.getId());
         verify(pdfStoragePort).delete(doc.getDocumentPath());
@@ -457,7 +458,7 @@ class SagaCommandHandlerTest {
     void handleCompensation_noDocument() {
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.empty());
 
-        sagaCommandHandler.handleCompensation(compensateCommand());
+        sagaCommandHandler.handle(compensateCommand());
 
         verify(pdfDocumentService, never()).deleteById(any());
         verifyNoInteractions(pdfStoragePort);
@@ -471,7 +472,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
         doThrow(new RuntimeException("MinIO error")).when(pdfStoragePort).delete(anyString());
 
-        sagaCommandHandler.handleCompensation(compensateCommand());
+        sagaCommandHandler.handle(compensateCommand());
 
         verify(pdfDocumentService).deleteById(doc.getId());
         verify(pdfDocumentService).publishCompensated(any());
@@ -515,7 +516,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
         doThrow(new RuntimeException("DB error")).when(pdfDocumentService).deleteById(any());
 
-        sagaCommandHandler.handleCompensation(compensateCommand());
+        sagaCommandHandler.handle(compensateCommand());
 
         verify(pdfDocumentService).publishCompensationFailure(any(), contains("Compensation failed"));
         verify(pdfDocumentService, never()).publishCompensated(any());
@@ -538,7 +539,7 @@ class SagaCommandHandlerTest {
                 .thenThrow(CallNotPermittedException.createCallNotPermittedException(
                         CircuitBreaker.ofDefaults("minio")));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).failGenerationAndPublish(
                 eq(doc.getId()), contains("circuit breaker"), anyInt(), any());
@@ -583,7 +584,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.findByInvoiceId("inv-001"))
                 .thenThrow(new OptimisticLockingFailureException("version conflict"));
 
-        sagaCommandHandler.handleProcessCommand(processCommand());
+        sagaCommandHandler.handle(processCommand());
 
         verify(pdfDocumentService).publishGenerationFailure(
                 any(), contains("Concurrent modification"));
