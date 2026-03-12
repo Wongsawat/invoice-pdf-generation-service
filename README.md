@@ -210,7 +210,12 @@ src/main/java/com/wpanther/invoice/pdf/
 
 ## License
 
-[Specify your license]
+This project is licensed under the MIT License.
+
+## Maintainer
+
+**Weerachat Wongsawat**
+[ rabbit_roger@yahoo.com ](mailto:rabbit_roger@yahoo.com)
 
 ## Contributing
 
