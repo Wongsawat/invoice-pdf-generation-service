@@ -1,7 +1,7 @@
 package com.wpanther.invoice.pdf.infrastructure.config;
 
-import com.wpanther.invoice.pdf.infrastructure.persistence.outbox.JpaOutboxEventRepository;
-import com.wpanther.invoice.pdf.infrastructure.persistence.outbox.SpringDataOutboxRepository;
+import com.wpanther.invoice.pdf.infrastructure.adapter.out.persistence.outbox.JpaOutboxEventRepository;
+import com.wpanther.invoice.pdf.infrastructure.adapter.out.persistence.outbox.SpringDataOutboxRepository;
 import com.wpanther.saga.domain.outbox.OutboxEventRepository;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
