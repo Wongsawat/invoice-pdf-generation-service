@@ -2,6 +2,7 @@ package com.wpanther.invoice.pdf.infrastructure.adapter.out.pdf;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.invoice.pdf.domain.exception.InvoicePdfGenerationException;
 import com.wpanther.invoice.pdf.domain.service.InvoicePdfGenerationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
