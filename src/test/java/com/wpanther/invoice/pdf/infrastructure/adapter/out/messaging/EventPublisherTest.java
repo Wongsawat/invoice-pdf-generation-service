@@ -2,6 +2,7 @@ package com.wpanther.invoice.pdf.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
+import com.wpanther.saga.domain.model.TraceEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +32,7 @@ class EventPublisherTest {
 
     private InvoicePdfGeneratedEvent buildEvent() {
         return new InvoicePdfGeneratedEvent(
-                "doc-123", "inv-001", "INV-2024-001",
+                "saga-001", "doc-123", "inv-001", "INV-2024-001",
                 "http://localhost:9001/invoices/test.pdf", 12345L, true, "corr-456"
         );
     }
@@ -85,5 +86,21 @@ class EventPublisherTest {
         );
         assertThat(aggregateIdCaptor.getValue()).isEqualTo("inv-001");
         assertThat(partitionKeyCaptor.getValue()).isEqualTo("inv-001");
+    }
+
+    @Test
+    @DisplayName("InvoicePdfGeneratedEvent correlationId is accessible via polymorphic TraceEvent reference")
+    void getCorrelationId_polymorphicAccessorShouldReturnProvidedValue() {
+        // Arrange
+        InvoicePdfGeneratedEvent event = new InvoicePdfGeneratedEvent(
+                "saga-001", "doc-123", "inv-001", "INV-2024-001",
+                "http://localhost:9001/invoices/test.pdf", 12345L, true,
+                "corr-abc");
+
+        // Act — call via polymorphic TraceEvent reference
+        TraceEvent traceEvent = event;
+
+        // Assert
+        assertThat(traceEvent.getCorrelationId()).isEqualTo("corr-abc");
     }
 }

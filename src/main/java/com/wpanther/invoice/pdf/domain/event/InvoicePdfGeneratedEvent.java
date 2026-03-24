@@ -37,14 +37,13 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
     @JsonProperty("xmlEmbedded")
     private final boolean xmlEmbedded;
 
-    @JsonProperty("correlationId")
-    private final String correlationId;
-
     /**
-     * Convenience constructor. sagaId is null — this is a notification event,
-     * not a saga-scoped event. correlationId is carried as its own field.
+     * Convenience constructor for creating a new invoice PDF generated event.
+     * Both {@code sagaId} and {@code correlationId} are stored in the
+     * {@link TraceEvent} base class.
      */
     public InvoicePdfGeneratedEvent(
+            String sagaId,
             String documentId,
             String invoiceId,
             String invoiceNumber,
@@ -53,14 +52,13 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
             boolean xmlEmbedded,
             String correlationId
     ) {
-        super(null, SOURCE, TRACE_TYPE, null);
+        super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
-        this.correlationId = correlationId;
     }
 
     @Override
@@ -86,13 +84,12 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
             @JsonProperty("xmlEmbedded") boolean xmlEmbedded,
             @JsonProperty("correlationId") String correlationId
     ) {
-        super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
+        super(eventId, occurredAt, eventType, version, null, correlationId, source, traceType, context);
         this.documentId = documentId;
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
-        this.correlationId = correlationId;
     }
 }

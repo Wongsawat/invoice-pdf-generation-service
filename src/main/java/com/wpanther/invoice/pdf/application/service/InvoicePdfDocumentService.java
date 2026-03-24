@@ -219,6 +219,7 @@ public class InvoicePdfDocumentService {
     private InvoicePdfGeneratedEvent buildGeneratedEvent(InvoicePdfDocument doc,
                                                           ProcessInvoicePdfCommand command) {
         return new InvoicePdfGeneratedEvent(
+                command.getSagaId(),
                 command.getDocumentId(),
                 doc.getInvoiceId(),
                 doc.getInvoiceNumber(),

@@ -124,7 +124,7 @@ class SagaRouteConfigTest {
     @DisplayName("Should serialize InvoicePdfGeneratedEvent with correct eventType")
     void testInvoicePdfGeneratedEventSerialization() throws Exception {
         InvoicePdfGeneratedEvent event = new InvoicePdfGeneratedEvent(
-                "doc-123", "inv-001", "INV-2024-001",
+                "saga-001", "doc-123", "inv-001", "INV-2024-001",
                 "http://minio/invoices/test.pdf", 12345L, true, "corr-456"
         );
 
