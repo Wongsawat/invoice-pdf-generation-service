@@ -2,6 +2,7 @@ package com.wpanther.invoice.pdf.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.application.port.out.PdfEventPort;
+import com.wpanther.invoice.pdf.domain.constants.PdfGenerationConstants;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +19,6 @@ import java.util.Map;
 @Component
 @Slf4j
 public class EventPublisher implements PdfEventPort {
-
-    private static final String AGGREGATE_TYPE = "InvoicePdfDocument";
-    private static final String DOCUMENT_TYPE = "INVOICE";
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
@@ -41,13 +39,13 @@ public class EventPublisher implements PdfEventPort {
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPdfGenerated(InvoicePdfGeneratedEvent event) {
         Map<String, String> headers = Map.of(
-            "documentType", DOCUMENT_TYPE,
+            "documentType", PdfGenerationConstants.DOCUMENT_TYPE,
             "correlationId", event.getCorrelationId()
         );
 
         outboxService.saveWithRouting(
                 event,
-                AGGREGATE_TYPE,
+                OutboxConstants.AGGREGATE_TYPE,
                 event.getInvoiceId(),
                 pdfGeneratedTopic,
                 event.getInvoiceId(),
