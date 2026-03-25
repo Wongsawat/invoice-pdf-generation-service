@@ -7,8 +7,9 @@ import com.wpanther.invoice.pdf.domain.repository.InvoicePdfDocumentRepository;
 import com.wpanther.invoice.pdf.domain.event.CompensateInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.ProcessInvoicePdfCommand;
 import com.wpanther.invoice.pdf.domain.event.InvoicePdfGeneratedEvent;
-import lombok.RequiredArgsConstructor;
+import com.wpanther.invoice.pdf.infrastructure.metrics.PdfGenerationMetrics;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +29,25 @@ import java.util.UUID;
  * and MinIO upload operations.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class InvoicePdfDocumentService {
 
     private final InvoicePdfDocumentRepository repository;
     private final PdfEventPort pdfEventPort;
     private final SagaReplyPort sagaReplyPort;
+
+    @Autowired(required = false)
+    private PdfGenerationMetrics pdfGenerationMetrics;
+
+    public InvoicePdfDocumentService(InvoicePdfDocumentRepository repository,
+                                     PdfEventPort pdfEventPort,
+                                     SagaReplyPort sagaReplyPort,
+                                     PdfGenerationMetrics pdfGenerationMetrics) {
+        this.repository = repository;
+        this.pdfEventPort = pdfEventPort;
+        this.sagaReplyPort = sagaReplyPort;
+        this.pdfGenerationMetrics = pdfGenerationMetrics;
+    }
 
     // -------------------------------------------------------------------------
     // Queries
@@ -169,6 +182,12 @@ public class InvoicePdfDocumentService {
     /** Retry-exhausted path: send FAILURE reply without touching document state. */
     @Transactional
     public void publishRetryExhausted(ProcessInvoicePdfCommand command) {
+        // Record retry exhaustion metric for monitoring upstream service issues
+        if (pdfGenerationMetrics != null) {
+            pdfGenerationMetrics.recordRetryExhausted(
+                    command.getSagaId(), command.getInvoiceId(), command.getInvoiceNumber());
+        }
+
         sagaReplyPort.publishFailure(
                 command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
                 "Maximum retry attempts exceeded");
