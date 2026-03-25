@@ -21,15 +21,16 @@ import java.util.List;
  * <p>
  * Required fonts (from fop/fop.xconf):
  * <ul>
- *   <li>THSarabunNew.ttf, THSarabunNew-Bold.ttf, THSarabunNew-Italic.ttf, THSarabunNew-BoldItalic.ttf</li>
  *   <li>NotoSansThaiLooped-Regular.ttf, NotoSansThaiLooped-Bold.ttf</li>
  * </ul>
  * <p>
  * Font sources:
  * <ul>
- *   <li>TH Sarabun New: https://www.f0nt.com/release/th-sarabun-new/</li>
  *   <li>Noto Sans Thai Looped: https://fonts.google.com/noto/specimen/Noto+Sans+Thai+Looped</li>
  * </ul>
+ * <p>
+ * Note: TH Sarabun New fonts are not included in this repository. If your fop.xconf
+ * configuration requires them, download from: https://www.f0nt.com/release/th-sarabun-new/
  */
 @Component
 @Slf4j
@@ -39,12 +40,12 @@ public class FontHealthCheck {
     /**
      * Required Thai font files for PDF generation.
      * These must match the fonts configured in fop/fop.xconf.
+     *
+     * Note: Only Noto Sans Thai Looped fonts are included in this repository.
+     * TH Sarabun New fonts need to be downloaded separately if required by fop.xconf.
+     * See: src/main/resources/fonts/README.md
      */
     private static final String[] REQUIRED_FONTS = {
-            "fonts/THSarabunNew.ttf",
-            "fonts/THSarabunNew-Bold.ttf",
-            "fonts/THSarabunNew-Italic.ttf",
-            "fonts/THSarabunNew-BoldItalic.ttf",
             "fonts/NotoSansThaiLooped-Regular.ttf",
             "fonts/NotoSansThaiLooped-Bold.ttf"
     };
@@ -97,8 +98,7 @@ public class FontHealthCheck {
         return String.format(
                 "Missing %d of %d required Thai fonts: %s. " +
                 "Place fonts in src/main/resources/fonts/ or disable check with app.fonts.health-check.enabled=false. " +
-                "Download fonts from: TH Sarabun New (https://www.f0nt.com/release/th-sarabun-new/), " +
-                "Noto Sans Thai Looped (https://fonts.google.com/noto/specimen/Noto+Sans+Thai+Looped)",
+                "Download fonts from: Noto Sans Thai Looped (https://fonts.google.com/noto/specimen/Noto+Sans+Thai+Looped)",
                 missingFonts.size(),
                 REQUIRED_FONTS.length,
                 missingFonts
