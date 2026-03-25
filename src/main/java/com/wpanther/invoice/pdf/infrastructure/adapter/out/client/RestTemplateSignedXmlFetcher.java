@@ -1,6 +1,7 @@
 package com.wpanther.invoice.pdf.infrastructure.adapter.out.client;
 
 import com.wpanther.invoice.pdf.application.port.out.SignedXmlFetchPort;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -54,6 +55,7 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
     }
 
     @Override
+    @CircuitBreaker(name = "signedXmlFetch", fallbackMethod = "fallbackOnFailure")
     public String fetch(String url) {
         validateUrl(url);
         log.debug("Fetching signed XML from: {}", url);
@@ -82,6 +84,23 @@ public class RestTemplateSignedXmlFetcher implements SignedXmlFetchPort {
         } catch (Exception e) {
             throw new SignedXmlFetchException("Failed to download signed XML from " + url, e);
         }
+    }
+
+    /**
+     * Fallback method for circuit breaker.
+     * <p>
+     * Called when the circuit breaker is OPEN or HALF_OPEN and calls are being rejected.
+     * Throws an exception to trigger the saga retry mechanism.
+     *
+     * @param url the URL being fetched
+     * @param throwable the cause of the circuit breaker activation
+     * @return never returns; always throws
+     * @throws SignedXmlFetchException indicating circuit breaker is open
+     */
+    private String fallbackOnFailure(String url, Throwable throwable) {
+        throw new SignedXmlFetchException(
+                "Circuit breaker 'signedXmlFetch' is OPEN — " +
+                "document-storage-service is degraded. URL: " + url, throwable);
     }
 
     /**

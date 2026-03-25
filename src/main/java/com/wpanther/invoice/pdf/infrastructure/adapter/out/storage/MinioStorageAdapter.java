@@ -10,11 +10,16 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * MinIO/S3-backed implementation of {@link PdfStoragePort}.
@@ -94,5 +99,55 @@ public class MinioStorageAdapter implements PdfStoragePort {
         String fileName = String.format("invoice-%s-%s.pdf", safeName, UUID.randomUUID());
         return String.format("%04d/%02d/%02d/%s",
                 now.getYear(), now.getMonthValue(), now.getDayOfMonth(), fileName);
+    }
+
+    /**
+     * List all PDF objects in the MinIO bucket.
+     * <p>
+     * Used by periodic cleanup job to find orphaned objects.
+     * This operation bypasses the circuit breaker as it's a maintenance task.
+     *
+     * @return list of all S3 object keys in the bucket
+     */
+    public List<String> listAllPdfs() {
+        ListObjectsV2Request request = ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .build();
+        ListObjectsV2Response response = s3Client.listObjectsV2(request);
+        return response.contents().stream()
+                .map(S3Object::key)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Delete an object from MinIO without circuit breaker protection.
+     * <p>
+     * Used by periodic cleanup job to remove orphaned objects.
+     * Failures are logged but do not throw exceptions to avoid
+     * interrupting batch cleanup operations.
+     *
+     * @param key the S3 object key to delete
+     */
+    public void deleteWithoutCircuitBreaker(String key) {
+        try {
+            doDelete(key);
+        } catch (Exception e) {
+            log.warn("Failed to delete orphaned PDF from MinIO: bucket={}, key={}, error={}",
+                    bucketName, key, e.getMessage());
+        }
+    }
+
+    /**
+     * Internal delete method without circuit breaker or timer instrumentation.
+     * Used by deleteWithoutCircuitBreaker for cleanup operations.
+     *
+     * @param key the S3 object key to delete
+     */
+    private void doDelete(String key) {
+        s3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build());
+        log.info("Deleted PDF from MinIO (without CB): bucket={}, key={}", bucketName, key);
     }
 }

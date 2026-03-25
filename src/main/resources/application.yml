@@ -61,6 +61,10 @@ app:
     region: ${MINIO_REGION:us-east-1}
     base-url: ${MINIO_BASE_URL:http://localhost:9001/invoices}
     path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
+    # Orphaned PDF cleanup - disabled by default, enable with MINIO_CLEANUP_ENABLED=true
+    cleanup:
+      enabled: ${MINIO_CLEANUP_ENABLED:false}
+      cron: ${MINIO_CLEANUP_CRON:0 0 2 * * ?}  # Daily at 2 AM
   pdf:
     icc-profile-path: ${PDF_ICC_PROFILE_PATH:icc/sRGB.icc}
     generation:
@@ -72,6 +76,11 @@ app:
   invoice:
     default-vat-rate: ${INVOICE_DEFAULT_VAT_RATE:7}
     max-json-size-bytes: ${INVOICE_MAX_JSON_SIZE_BYTES:1048576}
+  # Font health check - validates Thai fonts at startup (enabled by default)
+  fonts:
+    health-check:
+      enabled: ${FONT_HEALTH_CHECK_ENABLED:true}
+      fail-on-error: ${FONT_HEALTH_CHECK_FAIL_ON_ERROR:true}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:10000}  # Increase to 30000+ ms in production for large signed XML
@@ -107,10 +116,11 @@ management:
     tracing:
       endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
-# Resilience4j circuit breaker for MinIO storage
+# Resilience4j circuit breaker for external service calls
 resilience4j:
   circuitbreaker:
     instances:
+      # MinIO S3 storage circuit breaker
       minio:
         sliding-window-size: 10
         failure-rate-threshold: 50
@@ -118,6 +128,14 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
+      # Signed XML fetch circuit breaker (document-storage-service)
+      signedXmlFetch:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3s
 
 # Logging
 logging:
