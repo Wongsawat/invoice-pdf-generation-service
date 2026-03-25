@@ -32,6 +32,10 @@ camel:
 
 # Application configuration for tests
 app:
+  # Disable font health check in tests (fonts not present in test environment)
+  fonts:
+    health-check:
+      enabled: false
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
