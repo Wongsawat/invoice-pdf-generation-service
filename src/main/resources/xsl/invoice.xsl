@@ -14,7 +14,7 @@
     <xsl:variable name="margin">15mm</xsl:variable>
 
     <!-- Font settings -->
-    <xsl:variable name="font-family">THSarabunNew, NotoSansThai, Helvetica, sans-serif</xsl:variable>
+    <xsl:variable name="font-family">NotoSansThaiLooped, Helvetica, sans-serif</xsl:variable>
     <xsl:variable name="font-size">11pt</xsl:variable>
     <xsl:variable name="font-size-small">9pt</xsl:variable>
     <xsl:variable name="font-size-large">14pt</xsl:variable>

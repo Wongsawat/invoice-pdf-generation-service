@@ -14,12 +14,12 @@ import java.util.List;
 /**
  * Startup health check for required Thai font files.
  * <p>
- * Validates that all fonts referenced in fop.xconf are present in the classpath.
+ * Validates that all fonts referenced in fop.xconf and invoice.xsl are present in the classpath.
  * Fails fast at startup if fonts are missing, preventing runtime PDF generation failures.
  * <p>
  * Enabled via configuration: {@code app.fonts.health-check.enabled=true}
  * <p>
- * Required fonts (from fop/fop.xconf):
+ * Required fonts (from fop/fop.xconf and invoice.xsl):
  * <ul>
  *   <li>NotoSansThaiLooped-Regular.ttf, NotoSansThaiLooped-Bold.ttf</li>
  * </ul>
@@ -29,8 +29,9 @@ import java.util.List;
  *   <li>Noto Sans Thai Looped: https://fonts.google.com/noto/specimen/Noto+Sans+Thai+Looped</li>
  * </ul>
  * <p>
- * Note: TH Sarabun New fonts are not included in this repository. If your fop.xconf
- * configuration requires them, download from: https://www.f0nt.com/release/th-sarabun-new/
+ * Note: Invoice PDF Generation Service uses NotoSansThaiLooped as the primary font family.
+ * Tax Invoice PDF Generation Service uses THSarabunNew as the primary font family.
+ * This design ensures each document type has a distinct font configuration.
  */
 @Component
 @Slf4j
@@ -39,11 +40,9 @@ public class FontHealthCheck {
 
     /**
      * Required Thai font files for PDF generation.
-     * These must match the fonts configured in fop/fop.xconf.
+     * These must match the fonts configured in fop/fop.xconf and used in invoice.xsl.
      *
-     * Note: Only Noto Sans Thai Looped fonts are included in this repository.
-     * TH Sarabun New fonts need to be downloaded separately if required by fop.xconf.
-     * See: src/main/resources/fonts/README.md
+     * Invoice PDF Generation Service uses NotoSansThaiLooped as the primary font.
      */
     private static final String[] REQUIRED_FONTS = {
             "fonts/NotoSansThaiLooped-Regular.ttf",
