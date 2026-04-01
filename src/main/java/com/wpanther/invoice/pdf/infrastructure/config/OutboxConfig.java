@@ -1,8 +1,10 @@
 package com.wpanther.invoice.pdf.infrastructure.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.invoice.pdf.infrastructure.adapter.out.persistence.outbox.JpaOutboxEventRepository;
 import com.wpanther.invoice.pdf.infrastructure.adapter.out.persistence.outbox.SpringDataOutboxRepository;
 import com.wpanther.saga.domain.outbox.OutboxEventRepository;
+import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -27,6 +29,12 @@ public class OutboxConfig {
     @ConditionalOnMissingBean(OutboxEventRepository.class)
     public OutboxEventRepository outboxEventRepository(SpringDataOutboxRepository springRepository) {
         return new JpaOutboxEventRepository(springRepository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(OutboxService.class)
+    public OutboxService outboxService(OutboxEventRepository repository, ObjectMapper objectMapper) {
+        return new OutboxService(repository, objectMapper);
     }
 
     /**
