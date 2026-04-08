@@ -22,9 +22,6 @@ public class CompensateInvoicePdfCommand extends SagaCommand {
     @JsonProperty("documentId")
     private final String documentId;
 
-    @JsonProperty("invoiceId")
-    private final String invoiceId;
-
     @JsonCreator
     public CompensateInvoicePdfCommand(
             @JsonProperty("eventId") UUID eventId,
@@ -34,20 +31,17 @@ public class CompensateInvoicePdfCommand extends SagaCommand {
             @JsonProperty("sagaId") String sagaId,
             @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
-            @JsonProperty("documentId") String documentId,
-            @JsonProperty("invoiceId") String invoiceId) {
+            @JsonProperty("documentId") String documentId) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
     }
 
     /**
      * Convenience constructor for testing.
      */
     public CompensateInvoicePdfCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                        String documentId, String invoiceId) {
+                                        String documentId) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = Objects.requireNonNull(documentId, "documentId is required");
-        this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
     }
 }

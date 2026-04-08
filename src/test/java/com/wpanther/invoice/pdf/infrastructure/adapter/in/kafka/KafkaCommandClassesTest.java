@@ -24,20 +24,18 @@ class KafkaCommandClassesTest {
                 SagaStep.GENERATE_INVOICE_PDF,
                 "corr-456",
                 "doc-789",
-                "inv-001",
                 "INV-2024-001",
                 "http://minio/signed/invoice.xml",
-                "{\"invoiceNumber\":\"INV-2024-001\"}"
+                "{\"documentNumber\":\"INV-2024-001\"}"
         );
 
         assertThat(cmd.getSagaId()).isEqualTo("saga-123");
         assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
         assertThat(cmd.getCorrelationId()).isEqualTo("corr-456");
         assertThat(cmd.getDocumentId()).isEqualTo("doc-789");
-        assertThat(cmd.getInvoiceId()).isEqualTo("inv-001");
-        assertThat(cmd.getInvoiceNumber()).isEqualTo("INV-2024-001");
+        assertThat(cmd.getDocumentNumber()).isEqualTo("INV-2024-001");
         assertThat(cmd.getSignedXmlUrl()).isEqualTo("http://minio/signed/invoice.xml");
-        assertThat(cmd.getInvoiceDataJson()).isEqualTo("{\"invoiceNumber\":\"INV-2024-001\"}");
+        assertThat(cmd.getInvoiceDataJson()).isEqualTo("{\"documentNumber\":\"INV-2024-001\"}");
     }
 
     @Test
@@ -52,15 +50,13 @@ class KafkaCommandClassesTest {
                 "saga-123",
                 SagaStep.GENERATE_INVOICE_PDF,
                 "corr-456",
-                "doc-789",
-                "inv-001"
+                "doc-789"
         );
 
         assertThat(cmd.getSagaId()).isEqualTo("saga-123");
         assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
         assertThat(cmd.getCorrelationId()).isEqualTo("corr-456");
         assertThat(cmd.getDocumentId()).isEqualTo("doc-789");
-        assertThat(cmd.getInvoiceId()).isEqualTo("inv-001");
     }
 
     @Test
@@ -77,7 +73,6 @@ class KafkaCommandClassesTest {
                 SagaStep.GENERATE_INVOICE_PDF,
                 "corr-456",
                 "doc-789",
-                "inv-001",
                 "INV-2024-001",
                 "http://minio/signed/invoice.xml",
                 "{}"
@@ -94,8 +89,7 @@ class KafkaCommandClassesTest {
                 "saga-123",
                 SagaStep.GENERATE_INVOICE_PDF,
                 "corr-456",
-                "doc-789",
-                "inv-001"
+                "doc-789"
         );
 
         var domainCompensate = mapper.toCompensate(kafkaCompensate);
@@ -117,7 +111,6 @@ class KafkaCommandClassesTest {
                 SagaStep.GENERATE_INVOICE_PDF,
                 "corr-789",
                 "doc-111",
-                "inv-002",
                 "INV-2025-001",
                 "http://minio/signed/invoice2.xml",
                 "{\"amount\":1000,\"currency\":\"THB\"}"
@@ -126,8 +119,8 @@ class KafkaCommandClassesTest {
         var domainProcess = mapper.toProcess(kafkaProcess);
         assertThat(domainProcess).isNotNull();
         assertThat(domainProcess.getSagaId()).isEqualTo("saga-456");
-        assertThat(domainProcess.getInvoiceId()).isEqualTo("inv-002");
-        assertThat(domainProcess.getInvoiceNumber()).isEqualTo("INV-2025-001");
+        assertThat(domainProcess.getDocumentId()).isEqualTo("doc-111");
+        assertThat(domainProcess.getDocumentNumber()).isEqualTo("INV-2025-001");
         assertThat(domainProcess.getSignedXmlUrl()).isEqualTo("http://minio/signed/invoice2.xml");
         assertThat(domainProcess.getInvoiceDataJson()).isEqualTo("{\"amount\":1000,\"currency\":\"THB\"}");
 
@@ -140,14 +133,12 @@ class KafkaCommandClassesTest {
                 "saga-456",
                 SagaStep.GENERATE_INVOICE_PDF,
                 "corr-789",
-                "doc-111",
-                "inv-002"
+                "doc-111"
         );
 
         var domainCompensate = mapper.toCompensate(kafkaCompensate);
         assertThat(domainCompensate).isNotNull();
         assertThat(domainCompensate.getSagaId()).isEqualTo("saga-456");
-        assertThat(domainCompensate.getInvoiceId()).isEqualTo("inv-002");
         assertThat(domainCompensate.getDocumentId()).isEqualTo("doc-111");
     }
 }

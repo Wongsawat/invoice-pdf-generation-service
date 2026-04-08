@@ -22,11 +22,8 @@ public class ProcessInvoicePdfCommand extends SagaCommand {
     @JsonProperty("documentId")
     private final String documentId;
 
-    @JsonProperty("invoiceId")
-    private final String invoiceId;
-
-    @JsonProperty("invoiceNumber")
-    private final String invoiceNumber;
+    @JsonProperty("documentNumber")
+    private final String documentNumber;
 
     @JsonProperty("signedXmlUrl")
     private final String signedXmlUrl;
@@ -44,14 +41,12 @@ public class ProcessInvoicePdfCommand extends SagaCommand {
             @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
             @JsonProperty("documentId") String documentId,
-            @JsonProperty("invoiceId") String invoiceId,
-            @JsonProperty("invoiceNumber") String invoiceNumber,
+            @JsonProperty("documentNumber") String documentNumber,
             @JsonProperty("signedXmlUrl") String signedXmlUrl,
             @JsonProperty("invoiceDataJson") String invoiceDataJson) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
-        this.invoiceNumber = invoiceNumber;
+        this.documentNumber = documentNumber;
         this.signedXmlUrl = signedXmlUrl;
         this.invoiceDataJson = invoiceDataJson;
     }
@@ -60,12 +55,11 @@ public class ProcessInvoicePdfCommand extends SagaCommand {
      * Convenience constructor for testing.
      */
     public ProcessInvoicePdfCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                     String documentId, String invoiceId, String invoiceNumber,
+                                     String documentId, String documentNumber,
                                      String signedXmlUrl, String invoiceDataJson) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = Objects.requireNonNull(documentId, "documentId is required");
-        this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
-        this.invoiceNumber = Objects.requireNonNull(invoiceNumber, "invoiceNumber is required");
+        this.documentNumber = Objects.requireNonNull(documentNumber, "documentNumber is required");
         this.signedXmlUrl = Objects.requireNonNull(signedXmlUrl, "signedXmlUrl is required");
         this.invoiceDataJson = Objects.requireNonNull(invoiceDataJson, "invoiceDataJson is required");
     }

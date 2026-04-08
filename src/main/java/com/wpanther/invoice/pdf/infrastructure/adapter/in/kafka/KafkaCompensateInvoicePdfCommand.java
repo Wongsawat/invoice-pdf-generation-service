@@ -18,9 +18,6 @@ public class KafkaCompensateInvoicePdfCommand extends SagaCommand {
     @JsonProperty("documentId")
     private final String documentId;
 
-    @JsonProperty("invoiceId")
-    private final String invoiceId;
-
     @JsonCreator
     public KafkaCompensateInvoicePdfCommand(
             @JsonProperty("eventId") UUID eventId,
@@ -30,17 +27,14 @@ public class KafkaCompensateInvoicePdfCommand extends SagaCommand {
             @JsonProperty("sagaId") String sagaId,
             @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
-            @JsonProperty("documentId") String documentId,
-            @JsonProperty("invoiceId") String invoiceId) {
+            @JsonProperty("documentId") String documentId) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
     }
 
     public KafkaCompensateInvoicePdfCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                            String documentId, String invoiceId) {
+                                            String documentId) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = Objects.requireNonNull(documentId, "documentId is required");
-        this.invoiceId = Objects.requireNonNull(invoiceId, "invoiceId is required");
     }
 }

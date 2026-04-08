@@ -43,19 +43,19 @@ class InvoicePdfDocumentServiceTest {
     private ProcessInvoicePdfCommand processCommand() {
         return new ProcessInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
-                "doc-123", "inv-001", "INV-001",
+                "doc-123", "INV-001",
                 "http://minio/signed.xml", "{}");
     }
 
     private CompensateInvoicePdfCommand compensateCommand() {
         return new CompensateInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
-                "doc-123", "inv-001");
+                "doc-123");
     }
 
     private InvoicePdfDocument generatingDoc() {
         return InvoicePdfDocument.builder()
-                .id(DOC_ID).invoiceId("inv-001").invoiceNumber("INV-001")
+                .id(DOC_ID).invoiceId("doc-123").invoiceNumber("INV-001")
                 .status(GenerationStatus.GENERATING)
                 .retryCount(0)
                 .build();
@@ -69,12 +69,12 @@ class InvoicePdfDocumentServiceTest {
     @DisplayName("findByInvoiceId() delegates to repository and returns the result")
     void findByInvoiceId_delegatesToRepository() {
         InvoicePdfDocument doc = generatingDoc();
-        when(repository.findByInvoiceId("inv-001")).thenReturn(Optional.of(doc));
+        when(repository.findByInvoiceId("doc-123")).thenReturn(Optional.of(doc));
 
-        Optional<InvoicePdfDocument> result = service.findByInvoiceId("inv-001");
+        Optional<InvoicePdfDocument> result = service.findByInvoiceId("doc-123");
 
         assertThat(result).isPresent().contains(doc);
-        verify(repository).findByInvoiceId("inv-001");
+        verify(repository).findByInvoiceId("doc-123");
     }
 
     @Test
@@ -96,10 +96,10 @@ class InvoicePdfDocumentServiceTest {
     void beginGeneration_savesOnce_inGeneratingState() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        InvoicePdfDocument result = service.beginGeneration("inv-001", "INV-001");
+        InvoicePdfDocument result = service.beginGeneration("doc-123", "INV-001");
 
         assertThat(result.getStatus()).isEqualTo(GenerationStatus.GENERATING);
-        assertThat(result.getInvoiceId()).isEqualTo("inv-001");
+        assertThat(result.getInvoiceId()).isEqualTo("doc-123");
         verify(repository, times(1)).save(any());
     }
 
@@ -178,7 +178,7 @@ class InvoicePdfDocumentServiceTest {
     @DisplayName("publishIdempotentSuccess() publishes both events without touching repository")
     void publishIdempotentSuccess_publishesWithoutSave() {
         InvoicePdfDocument existing = InvoicePdfDocument.builder()
-                .id(DOC_ID).invoiceId("inv-001").invoiceNumber("INV-001")
+                .id(DOC_ID).invoiceId("doc-123").invoiceNumber("INV-001")
                 .status(GenerationStatus.COMPLETED)
                 .documentUrl(FILE_URL).fileSize(9000L).xmlEmbedded(true)
                 .build();
@@ -262,14 +262,14 @@ class InvoicePdfDocumentServiceTest {
         UUID existingId = UUID.randomUUID();
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        InvoicePdfDocument result = service.replaceAndBeginGeneration(existingId, 1, "inv-001", "INV-001");
+        InvoicePdfDocument result = service.replaceAndBeginGeneration(existingId, 1, "doc-123", "INV-001");
 
         verify(repository).deleteById(existingId);
         verify(repository).flush();
         verify(repository).save(any());
         assertThat(result.getStatus()).isEqualTo(GenerationStatus.GENERATING);
         assertThat(result.getRetryCount()).isEqualTo(2); // previousRetryCount(1) + 1
-        assertThat(result.getInvoiceId()).isEqualTo("inv-001");
+        assertThat(result.getInvoiceId()).isEqualTo("doc-123");
         assertThat(result.getInvoiceNumber()).isEqualTo("INV-001");
     }
 

@@ -46,13 +46,13 @@ public class EventPublisher implements PdfEventPort {
         outboxService.saveWithRouting(
                 event,
                 OutboxConstants.AGGREGATE_TYPE,
-                event.getInvoiceId(),
+                event.getDocumentId(),
                 pdfGeneratedTopic,
-                event.getInvoiceId(),
+                event.getDocumentId(),
                 MessagingUtils.toJson(headers, objectMapper)
         );
 
-        log.info("Published InvoicePdfGeneratedEvent to outbox: invoiceNumber={} documentId={} correlationId={}",
-                event.getInvoiceNumber(), event.getDocumentId(), event.getCorrelationId());
+        log.info("Published InvoicePdfGeneratedEvent to outbox: documentNumber={} documentId={} correlationId={}",
+                event.getDocumentNumber(), event.getDocumentId(), event.getCorrelationId());
     }
 }

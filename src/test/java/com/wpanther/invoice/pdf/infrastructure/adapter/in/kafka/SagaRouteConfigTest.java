@@ -46,7 +46,7 @@ class SagaRouteConfigTest {
     void testProcessInvoicePdfCommandSerialization() throws Exception {
         ProcessInvoicePdfCommand command = new ProcessInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
-                "doc-123", "inv-001", "INV-2024-001",
+                "doc-123", "INV-2024-001",
                 "http://minio/signed/invoice.xml", "{}"
         );
 
@@ -57,8 +57,7 @@ class SagaRouteConfigTest {
         assertThat(deserialized.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
-        assertThat(deserialized.getInvoiceId()).isEqualTo("inv-001");
-        assertThat(deserialized.getInvoiceNumber()).isEqualTo("INV-2024-001");
+        assertThat(deserialized.getDocumentNumber()).isEqualTo("INV-2024-001");
         assertThat(deserialized.getSignedXmlUrl()).isEqualTo("http://minio/signed/invoice.xml");
         assertThat(deserialized.getInvoiceDataJson()).isEqualTo("{}");
         assertThat(deserialized.getEventId()).isNotNull();
@@ -78,8 +77,7 @@ class SagaRouteConfigTest {
                 "sagaStep": "generate-invoice-pdf",
                 "correlationId": "corr-456",
                 "documentId": "doc-123",
-                "invoiceId": "inv-001",
-                "invoiceNumber": "INV-2024-001",
+                "documentNumber": "INV-2024-001",
                 "signedXmlUrl": "http://minio/signed/invoice.xml",
                 "invoiceDataJson": "{\\"key\\": \\"value\\"}"
             }
@@ -90,7 +88,8 @@ class SagaRouteConfigTest {
         assertThat(cmd.getEventId()).isEqualTo(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));
         assertThat(cmd.getSagaId()).isEqualTo("saga-001");
         assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
-        assertThat(cmd.getInvoiceId()).isEqualTo("inv-001");
+        assertThat(cmd.getDocumentId()).isEqualTo("doc-123");
+        assertThat(cmd.getDocumentNumber()).isEqualTo("INV-2024-001");
         assertThat(cmd.getInvoiceDataJson()).isEqualTo("{\"key\": \"value\"}");
     }
 
@@ -103,7 +102,7 @@ class SagaRouteConfigTest {
     void testCompensateInvoicePdfCommandSerialization() throws Exception {
         CompensateInvoicePdfCommand command = new CompensateInvoicePdfCommand(
                 "saga-001", SagaStep.GENERATE_INVOICE_PDF, "corr-456",
-                "doc-123", "inv-001"
+                "doc-123"
         );
 
         String json = objectMapper.writeValueAsString(command);
@@ -113,7 +112,6 @@ class SagaRouteConfigTest {
         assertThat(deserialized.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
-        assertThat(deserialized.getInvoiceId()).isEqualTo("inv-001");
     }
 
     // -------------------------------------------------------------------------
@@ -124,7 +122,7 @@ class SagaRouteConfigTest {
     @DisplayName("Should serialize InvoicePdfGeneratedEvent with correct eventType")
     void testInvoicePdfGeneratedEventSerialization() throws Exception {
         InvoicePdfGeneratedEvent event = new InvoicePdfGeneratedEvent(
-                "saga-001", "doc-123", "inv-001", "INV-2024-001",
+                "saga-001", "doc-123", "INV-2024-001",
                 "http://minio/invoices/test.pdf", 12345L, true, "corr-456"
         );
 
@@ -197,7 +195,7 @@ class SagaRouteConfigTest {
     @DisplayName("DLQ recovery: raw JSON bytes yield saga coordinates via JsonNode.path().asText(null)")
     void dlqRecovery_rawJsonBytes_sagaCoordinatesExtractable() throws Exception {
         byte[] rawBytes = """
-            {"sagaId":"saga-001","sagaStep":"generate-invoice-pdf","correlationId":"corr-456","invoiceId":"inv-001"}
+            {"sagaId":"saga-001","sagaStep":"generate-invoice-pdf","correlationId":"corr-456","documentId":"doc-001"}
             """.getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
         JsonNode node = objectMapper.readTree(rawBytes);
@@ -252,8 +250,7 @@ class SagaRouteConfigTest {
                 "sagaId": "saga-002",
                 "sagaStep": "generate-invoice-pdf",
                 "correlationId": "corr-789",
-                "documentId": "doc-456",
-                "invoiceId": "inv-002"
+                "documentId": "doc-456"
             }
             """;
 
@@ -263,7 +260,6 @@ class SagaRouteConfigTest {
         assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_INVOICE_PDF);
         assertThat(cmd.getCorrelationId()).isEqualTo("corr-789");
         assertThat(cmd.getDocumentId()).isEqualTo("doc-456");
-        assertThat(cmd.getInvoiceId()).isEqualTo("inv-002");
     }
 
     @Test
@@ -280,8 +276,7 @@ class SagaRouteConfigTest {
                 "traceType": "PDF_GENERATED",
                 "context": null,
                 "documentId": "doc-123",
-                "invoiceId": "inv-001",
-                "invoiceNumber": "INV-2024-001",
+                "documentNumber": "INV-2024-001",
                 "documentUrl": "http://localhost:9001/invoices/test.pdf",
                 "fileSize": 123456,
                 "xmlEmbedded": true,
@@ -292,8 +287,7 @@ class SagaRouteConfigTest {
         InvoicePdfGeneratedEvent event = objectMapper.readValue(json, InvoicePdfGeneratedEvent.class);
 
         assertThat(event.getDocumentId()).isEqualTo("doc-123");
-        assertThat(event.getInvoiceId()).isEqualTo("inv-001");
-        assertThat(event.getInvoiceNumber()).isEqualTo("INV-2024-001");
+        assertThat(event.getDocumentNumber()).isEqualTo("INV-2024-001");
         assertThat(event.getDocumentUrl()).isEqualTo("http://localhost:9001/invoices/test.pdf");
         assertThat(event.getFileSize()).isEqualTo(123456L);
         assertThat(event.isXmlEmbedded()).isTrue();

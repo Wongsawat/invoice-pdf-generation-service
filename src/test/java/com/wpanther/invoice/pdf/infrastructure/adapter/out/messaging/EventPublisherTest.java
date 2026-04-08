@@ -32,7 +32,7 @@ class EventPublisherTest {
 
     private InvoicePdfGeneratedEvent buildEvent() {
         return new InvoicePdfGeneratedEvent(
-                "saga-001", "doc-123", "inv-001", "INV-2024-001",
+                "saga-001", "doc-123", "INV-2024-001",
                 "http://localhost:9001/invoices/test.pdf", 12345L, true, "corr-456"
         );
     }
@@ -47,9 +47,9 @@ class EventPublisherTest {
         verify(outboxService).saveWithRouting(
                 eq(event),
                 eq("InvoicePdfDocument"),
-                eq("inv-001"),
+                eq("doc-123"),
                 eq("pdf.generated.invoice"),
-                eq("inv-001"),
+                eq("doc-123"),
                 any()
         );
     }
@@ -69,8 +69,8 @@ class EventPublisherTest {
     }
 
     @Test
-    @DisplayName("publishPdfGenerated() uses invoiceId as both aggregateId and partitionKey")
-    void publishPdfGenerated_usesInvoiceIdAsAggregateIdAndPartitionKey() {
+    @DisplayName("publishPdfGenerated() uses documentId as both aggregateId and partitionKey")
+    void publishPdfGenerated_usesDocumentIdAsAggregateIdAndPartitionKey() {
         InvoicePdfGeneratedEvent event = buildEvent();
         ArgumentCaptor<String> aggregateIdCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> partitionKeyCaptor = ArgumentCaptor.forClass(String.class);
@@ -84,8 +84,8 @@ class EventPublisherTest {
                 partitionKeyCaptor.capture(),
                 any()
         );
-        assertThat(aggregateIdCaptor.getValue()).isEqualTo("inv-001");
-        assertThat(partitionKeyCaptor.getValue()).isEqualTo("inv-001");
+        assertThat(aggregateIdCaptor.getValue()).isEqualTo("doc-123");
+        assertThat(partitionKeyCaptor.getValue()).isEqualTo("doc-123");
     }
 
     @Test
@@ -93,7 +93,7 @@ class EventPublisherTest {
     void getCorrelationId_polymorphicAccessorShouldReturnProvidedValue() {
         // Arrange
         InvoicePdfGeneratedEvent event = new InvoicePdfGeneratedEvent(
-                "saga-001", "doc-123", "inv-001", "INV-2024-001",
+                "saga-001", "doc-123", "INV-2024-001",
                 "http://localhost:9001/invoices/test.pdf", 12345L, true,
                 "corr-abc");
 

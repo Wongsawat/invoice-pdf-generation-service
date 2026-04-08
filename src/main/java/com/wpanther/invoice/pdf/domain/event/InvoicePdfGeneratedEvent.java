@@ -22,11 +22,8 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
     @JsonProperty("documentId")
     private final String documentId;
 
-    @JsonProperty("invoiceId")
-    private final String invoiceId;
-
-    @JsonProperty("invoiceNumber")
-    private final String invoiceNumber;
+    @JsonProperty("documentNumber")
+    private final String documentNumber;
 
     @JsonProperty("documentUrl")
     private final String documentUrl;
@@ -45,8 +42,7 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
     public InvoicePdfGeneratedEvent(
             String sagaId,
             String documentId,
-            String invoiceId,
-            String invoiceNumber,
+            String documentNumber,
             String documentUrl,
             long fileSize,
             boolean xmlEmbedded,
@@ -54,8 +50,7 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
     ) {
         super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
-        this.invoiceNumber = invoiceNumber;
+        this.documentNumber = documentNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
@@ -77,8 +72,7 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
             @JsonProperty("traceType") String traceType,
             @JsonProperty("context") String context,
             @JsonProperty("documentId") String documentId,
-            @JsonProperty("invoiceId") String invoiceId,
-            @JsonProperty("invoiceNumber") String invoiceNumber,
+            @JsonProperty("documentNumber") String documentNumber,
             @JsonProperty("documentUrl") String documentUrl,
             @JsonProperty("fileSize") long fileSize,
             @JsonProperty("xmlEmbedded") boolean xmlEmbedded,
@@ -86,8 +80,7 @@ public class InvoicePdfGeneratedEvent extends TraceEvent {
     ) {
         super(eventId, occurredAt, eventType, version, null, correlationId, source, traceType, context);
         this.documentId = documentId;
-        this.invoiceId = invoiceId;
-        this.invoiceNumber = invoiceNumber;
+        this.documentNumber = documentNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;

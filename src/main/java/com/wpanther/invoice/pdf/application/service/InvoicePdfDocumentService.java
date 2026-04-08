@@ -185,14 +185,14 @@ public class InvoicePdfDocumentService {
         // Record retry exhaustion metric for monitoring upstream service issues
         if (pdfGenerationMetrics != null) {
             pdfGenerationMetrics.recordRetryExhausted(
-                    command.getSagaId(), command.getInvoiceId(), command.getInvoiceNumber());
+                    command.getSagaId(), command.getDocumentId(), command.getDocumentNumber());
         }
 
         sagaReplyPort.publishFailure(
                 command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
                 "Maximum retry attempts exceeded");
-        log.error("Max retries exceeded for saga {} invoice {}",
-                command.getSagaId(), command.getInvoiceNumber());
+        log.error("Max retries exceeded for saga {} document {}",
+                command.getSagaId(), command.getDocumentNumber());
     }
 
     /** Generic failure before a document record was created. */
@@ -240,7 +240,6 @@ public class InvoicePdfDocumentService {
         return new InvoicePdfGeneratedEvent(
                 command.getSagaId(),
                 command.getDocumentId(),
-                doc.getInvoiceId(),
                 doc.getInvoiceNumber(),
                 doc.getDocumentUrl(),
                 doc.getFileSize(),

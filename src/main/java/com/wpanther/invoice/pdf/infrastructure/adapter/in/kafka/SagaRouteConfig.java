@@ -72,12 +72,12 @@ public class SagaRouteConfig extends RouteBuilder {
                             Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
                             Object body = exchange.getIn().getBody();
                             if (body instanceof KafkaProcessInvoicePdfCommand cmd) {
-                                log.error("DLQ: notifying orchestrator of retry exhaustion for saga {} invoice {}",
-                                        cmd.getSagaId(), cmd.getInvoiceNumber());
+                                log.error("DLQ: notifying orchestrator of retry exhaustion for saga {} document {}",
+                                        cmd.getSagaId(), cmd.getDocumentNumber());
                                 sagaCommandHandler.publishOrchestrationFailure(commandMapper.toProcess(cmd), cause);
                             } else if (body instanceof KafkaCompensateInvoicePdfCommand cmd) {
-                                log.error("DLQ: notifying orchestrator of compensation retry exhaustion for saga {} invoice {}",
-                                        cmd.getSagaId(), cmd.getInvoiceId());
+                                log.error("DLQ: notifying orchestrator of compensation retry exhaustion for saga {} document {}",
+                                        cmd.getSagaId(), cmd.getDocumentId());
                                 sagaCommandHandler.publishCompensationOrchestrationFailure(commandMapper.toCompensate(cmd), cause);
                             } else {
                                 // Body was never deserialized (e.g., malformed JSON, unknown enum).
@@ -105,8 +105,8 @@ public class SagaRouteConfig extends RouteBuilder {
                         .unmarshal().json(JsonLibrary.Jackson, KafkaProcessInvoicePdfCommand.class)
                         .process(exchange -> {
                                 KafkaProcessInvoicePdfCommand cmd = exchange.getIn().getBody(KafkaProcessInvoicePdfCommand.class);
-                                log.info("Processing saga command for saga: {}, invoice: {}",
-                                                cmd.getSagaId(), cmd.getInvoiceNumber());
+                                log.info("Processing saga command for saga: {}, document: {}",
+                                                cmd.getSagaId(), cmd.getDocumentNumber());
                                 processUseCase.handle(commandMapper.toProcess(cmd));
                         })
                         .log("Successfully processed saga command");
@@ -127,8 +127,8 @@ public class SagaRouteConfig extends RouteBuilder {
                         .unmarshal().json(JsonLibrary.Jackson, KafkaCompensateInvoicePdfCommand.class)
                         .process(exchange -> {
                                 KafkaCompensateInvoicePdfCommand cmd = exchange.getIn().getBody(KafkaCompensateInvoicePdfCommand.class);
-                                log.info("Processing compensation for saga: {}, invoice: {}",
-                                                cmd.getSagaId(), cmd.getInvoiceId());
+                                log.info("Processing compensation for saga: {}, document: {}",
+                                                cmd.getSagaId(), cmd.getDocumentId());
                                 compensateUseCase.handle(commandMapper.toCompensate(cmd));
                         })
                         .log("Successfully processed compensation command");

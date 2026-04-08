@@ -44,8 +44,8 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
     // MDC key constants — prevents typos in structured log fields
     private static final String MDC_SAGA_ID         = "sagaId";
     private static final String MDC_CORRELATION_ID  = "correlationId";
-    private static final String MDC_INVOICE_NUMBER  = "invoiceNumber";
-    private static final String MDC_INVOICE_ID      = "invoiceId";
+    private static final String MDC_DOCUMENT_NUMBER = "documentNumber";
+    private static final String MDC_DOCUMENT_ID     = "documentId";
 
     private final InvoicePdfDocumentService pdfDocumentService;
     private final InvoicePdfGenerationService pdfGenerationService;
@@ -77,11 +77,11 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
     public void handle(ProcessInvoicePdfCommand command) {
         MDC.put(MDC_SAGA_ID,        command.getSagaId());
         MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
-        MDC.put(MDC_INVOICE_NUMBER, command.getInvoiceNumber());
-        MDC.put(MDC_INVOICE_ID,     command.getInvoiceId());
+        MDC.put(MDC_DOCUMENT_NUMBER, command.getDocumentNumber());
+        MDC.put(MDC_DOCUMENT_ID,     command.getDocumentId());
         try {
-            log.info("Handling ProcessInvoicePdfCommand for saga {} invoice {}",
-                    command.getSagaId(), command.getInvoiceNumber());
+            log.info("Handling ProcessInvoicePdfCommand for saga {} document {}",
+                    command.getSagaId(), command.getDocumentNumber());
             try {
                 // Validate command fields first — before any DB mutation so a permanently
                 // malformed command never deletes an existing document or bypasses retry limits.
@@ -91,21 +91,21 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                             command, "signedXmlUrl is null or blank in saga command");
                     return;
                 }
-                String invoiceNumber = command.getInvoiceNumber();
-                if (invoiceNumber == null || invoiceNumber.isBlank()) {
+                String documentNumber = command.getDocumentNumber();
+                if (documentNumber == null || documentNumber.isBlank()) {
                     pdfDocumentService.publishGenerationFailure(
-                            command, "invoiceNumber is null or blank in saga command");
+                            command, "documentNumber is null or blank in saga command");
                     return;
                 }
-                String invoiceId = command.getInvoiceId();
-                if (invoiceId == null || invoiceId.isBlank()) {
+                String documentId = command.getDocumentId();
+                if (documentId == null || documentId.isBlank()) {
                     pdfDocumentService.publishGenerationFailure(
-                            command, "invoiceId is null or blank in saga command");
+                            command, "documentId is null or blank in saga command");
                     return;
                 }
 
                 Optional<InvoicePdfDocument> existing =
-                        pdfDocumentService.findByInvoiceId(invoiceId);
+                        pdfDocumentService.findByInvoiceId(documentId);
 
                 // Idempotency: already completed — re-publish and reply SUCCESS
                 if (existing.isPresent() && existing.get().isCompleted()) {
@@ -127,9 +127,9 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                     InvoicePdfDocument prior = existing.get();
                     if (!prior.isFailed()) {
                         // Document is stuck in a non-terminal state — TX2 likely rolled back.
-                        log.warn("Found document in non-terminal state (status={}) for invoice {} saga {} — "
+                        log.warn("Found document in non-terminal state (status={}) for document {} saga {} — "
                                 + "TX2 may have rolled back; will delete and retry",
-                                prior.getStatus(), command.getInvoiceId(), command.getSagaId());
+                                prior.getStatus(), command.getDocumentId(), command.getSagaId());
                     }
                     if (prior.isMaxRetriesExceeded(maxRetries)) {
                         pdfDocumentService.publishRetryExhausted(command);
@@ -143,9 +143,9 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                 InvoicePdfDocument document;
                 if (existing.isPresent()) {
                     document = pdfDocumentService.replaceAndBeginGeneration(
-                            existing.get().getId(), previousRetryCount, invoiceId, invoiceNumber);
+                            existing.get().getId(), previousRetryCount, documentId, documentNumber);
                 } else {
-                    document = pdfDocumentService.beginGeneration(invoiceId, invoiceNumber);
+                    document = pdfDocumentService.beginGeneration(documentId, documentNumber);
                 }
                 // ── Transaction committed ────────────────────────────────────────────
 
@@ -158,10 +158,10 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
 
                     // Generate PDF bytes (CPU: FOP + PDFBox)
                     byte[] pdfBytes = pdfGenerationService.generatePdf(
-                            invoiceNumber, signedXml, command.getInvoiceDataJson());
+                            documentNumber, signedXml, command.getInvoiceDataJson());
 
                     // Upload to MinIO (network I/O)
-                    s3Key = pdfStoragePort.store(invoiceNumber, pdfBytes);
+                    s3Key = pdfStoragePort.store(documentNumber, pdfBytes);
                     String fileUrl = pdfStoragePort.resolveUrl(s3Key);
 
                     // ── END NO-TRANSACTION BLOCK ─────────────────────────────────────
@@ -172,14 +172,14 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                             previousRetryCount, command);
                     // ── Transaction committed ────────────────────────────────────────
 
-                    log.debug("Successfully processed PDF generation for saga {} invoice {}",
-                            command.getSagaId(), invoiceNumber);
+                    log.debug("Successfully processed PDF generation for saga {} document {}",
+                            command.getSagaId(), documentNumber);
 
                 } catch (CallNotPermittedException e) {
                     // Circuit breaker is OPEN — MinIO is unreachable; do not attempt upload or delete
-                    log.warn("MinIO circuit breaker OPEN for saga {} invoice {} — "
+                    log.warn("MinIO circuit breaker OPEN for saga {} document {} — "
                             + "no upload attempted, will retry when CB re-closes: {}",
-                            command.getSagaId(), invoiceNumber, e.getMessage());
+                            command.getSagaId(), documentNumber, e.getMessage());
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), "MinIO circuit breaker open: " + e.getMessage(),
                             previousRetryCount, command);
@@ -193,12 +193,12 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                             log.warn("Deleted orphaned MinIO object {} after processing failure for saga {}",
                                     s3Key, command.getSagaId());
                         } catch (Exception deleteEx) {
-                            log.error("[ORPHAN_PDF] s3Key={} saga={} invoiceNumber={} error={} — manual recovery required: delete object from MinIO bucket",
-                                    s3Key, command.getSagaId(), invoiceNumber, describeThrowable(deleteEx));
+                            log.error("[ORPHAN_PDF] s3Key={} saga={} documentNumber={} error={} — manual recovery required: delete object from MinIO bucket",
+                                    s3Key, command.getSagaId(), documentNumber, describeThrowable(deleteEx));
                         }
                     }
-                    log.error("PDF generation/upload failed for saga {} invoice {}: {}",
-                            command.getSagaId(), invoiceNumber, e.getMessage(), e);
+                    log.error("PDF generation/upload failed for saga {} document {}: {}",
+                            command.getSagaId(), documentNumber, e.getMessage(), e);
                     // ── Short tx 2 (failure): mark FAILED + write FAILURE reply atomically
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), describeThrowable(e), previousRetryCount, command);
@@ -207,13 +207,13 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
 
             } catch (OptimisticLockingFailureException e) {
                 // Concurrent modification by another consumer — this is retryable via Camel
-                log.warn("Concurrent modification conflict for saga {} invoice {} — retryable: {}",
-                        command.getSagaId(), command.getInvoiceNumber(), e.getMessage());
+                log.warn("Concurrent modification conflict for saga {} document {} — retryable: {}",
+                        command.getSagaId(), command.getDocumentNumber(), e.getMessage());
                 pdfDocumentService.publishGenerationFailure(
                         command, "Concurrent modification conflict: " + e.getMessage());
             } catch (Exception e) {
-                log.error("Unexpected error for saga {} invoice {}: {}",
-                        command.getSagaId(), command.getInvoiceNumber(), e.getMessage(), e);
+                log.error("Unexpected error for saga {} document {}: {}",
+                        command.getSagaId(), command.getDocumentNumber(), e.getMessage(), e);
                 pdfDocumentService.publishGenerationFailure(command, describeThrowable(e));
             }
         } finally {
@@ -230,13 +230,13 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
     public void handle(CompensateInvoicePdfCommand command) {
         MDC.put(MDC_SAGA_ID,        command.getSagaId());
         MDC.put(MDC_CORRELATION_ID, command.getCorrelationId());
-        MDC.put(MDC_INVOICE_ID,     command.getInvoiceId());
+        MDC.put(MDC_DOCUMENT_ID,     command.getDocumentId());
         try {
-            log.info("Handling compensation for saga {} invoice {}",
-                    command.getSagaId(), command.getInvoiceId());
+            log.info("Handling compensation for saga {} document {}",
+                    command.getSagaId(), command.getDocumentId());
             try {
                 Optional<InvoicePdfDocument> existing =
-                        pdfDocumentService.findByInvoiceId(command.getInvoiceId());
+                        pdfDocumentService.findByInvoiceId(command.getDocumentId());
 
                 if (existing.isPresent()) {
                     InvoicePdfDocument document = existing.get();
@@ -254,16 +254,16 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                     log.info("Compensated InvoicePdfDocument {} for saga {}",
                             document.getId(), command.getSagaId());
                 } else {
-                    log.info("No document found for invoiceId {} — already compensated or never processed",
-                            command.getInvoiceId());
+                    log.info("No document found for documentId {} — already compensated or never processed",
+                            command.getDocumentId());
                 }
 
                 // Short tx: publish COMPENSATED reply
                 pdfDocumentService.publishCompensated(command);
 
             } catch (Exception e) {
-                log.error("Failed to compensate for saga {} invoice {}: {}",
-                        command.getSagaId(), command.getInvoiceId(), e.getMessage(), e);
+                log.error("Failed to compensate for saga {} document {}: {}",
+                        command.getSagaId(), command.getDocumentId(), e.getMessage(), e);
                 pdfDocumentService.publishCompensationFailure(
                         command, "Compensation failed: " + describeThrowable(e));
             }
@@ -284,8 +284,8 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                     + describeThrowable(cause);
             sagaReplyPort.publishFailure(
                     command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
-            log.error("Published FAILURE reply after DLQ routing for saga {} invoice {}",
-                    command.getSagaId(), command.getInvoiceNumber());
+            log.error("Published FAILURE reply after DLQ routing for saga {} document {}",
+                    command.getSagaId(), command.getDocumentNumber());
         } catch (Exception e) {
             log.error("Cannot notify orchestrator of DLQ failure for saga {} — orchestrator must timeout",
                     command.getSagaId(), e);
@@ -323,8 +323,8 @@ public class SagaCommandHandler implements ProcessInvoicePdfUseCase, CompensateI
                     + describeThrowable(cause);
             sagaReplyPort.publishFailure(
                     command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
-            log.error("Published FAILURE reply after compensation DLQ routing for saga {} invoice {}",
-                    command.getSagaId(), command.getInvoiceId());
+            log.error("Published FAILURE reply after compensation DLQ routing for saga {} document {}",
+                    command.getSagaId(), command.getDocumentId());
         } catch (Exception e) {
             log.error("Cannot notify orchestrator of compensation DLQ failure for saga {} — orchestrator must timeout",
                     command.getSagaId(), e);

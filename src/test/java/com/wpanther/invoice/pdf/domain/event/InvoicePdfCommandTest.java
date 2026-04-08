@@ -14,29 +14,19 @@ class InvoicePdfCommandTest {
     void processCommand_nullDocumentId_throwsNullPointerException() {
         assertThatThrownBy(() ->
                 new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        null, "inv-001", "INV-001", "http://localhost/signed.xml", "{}"))
+                        null, "INV-001", "http://localhost/signed.xml", "{}"))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("documentId");
     }
 
     @Test
-    @DisplayName("ProcessInvoicePdfCommand rejects null invoiceId")
-    void processCommand_nullInvoiceId_throwsNullPointerException() {
+    @DisplayName("ProcessInvoicePdfCommand rejects null documentNumber")
+    void processCommand_nullDocumentNumber_throwsNullPointerException() {
         assertThatThrownBy(() ->
                 new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        "doc-1", null, "INV-001", "http://localhost/signed.xml", "{}"))
+                        "doc-1", null, "http://localhost/signed.xml", "{}"))
                 .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("invoiceId");
-    }
-
-    @Test
-    @DisplayName("ProcessInvoicePdfCommand rejects null invoiceNumber")
-    void processCommand_nullInvoiceNumber_throwsNullPointerException() {
-        assertThatThrownBy(() ->
-                new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        "doc-1", "inv-001", null, "http://localhost/signed.xml", "{}"))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("invoiceNumber");
+                .hasMessageContaining("documentNumber");
     }
 
     @Test
@@ -44,7 +34,7 @@ class InvoicePdfCommandTest {
     void processCommand_nullSignedXmlUrl_throwsNullPointerException() {
         assertThatThrownBy(() ->
                 new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        "doc-1", "inv-001", "INV-001", null, "{}"))
+                        "doc-1", "INV-001", null, "{}"))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("signedXmlUrl");
     }
@@ -54,7 +44,7 @@ class InvoicePdfCommandTest {
     void processCommand_nullInvoiceDataJson_throwsNullPointerException() {
         assertThatThrownBy(() ->
                 new ProcessInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        "doc-1", "inv-001", "INV-001", "http://localhost/signed.xml", null))
+                        "doc-1", "INV-001", "http://localhost/signed.xml", null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("invoiceDataJson");
     }
@@ -64,9 +54,9 @@ class InvoicePdfCommandTest {
     void processCommand_validArgs_constructsSuccessfully() {
         ProcessInvoicePdfCommand cmd = new ProcessInvoicePdfCommand(
                 "saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                "doc-1", "inv-001", "INV-001", "http://localhost/signed.xml", "{}");
-        org.assertj.core.api.Assertions.assertThat(cmd.getInvoiceId()).isEqualTo("inv-001");
-        org.assertj.core.api.Assertions.assertThat(cmd.getInvoiceNumber()).isEqualTo("INV-001");
+                "doc-1", "INV-001", "http://localhost/signed.xml", "{}");
+        org.assertj.core.api.Assertions.assertThat(cmd.getDocumentId()).isEqualTo("doc-1");
+        org.assertj.core.api.Assertions.assertThat(cmd.getDocumentNumber()).isEqualTo("INV-001");
     }
 
     @Test
@@ -74,26 +64,16 @@ class InvoicePdfCommandTest {
     void compensateCommand_nullDocumentId_throwsNullPointerException() {
         assertThatThrownBy(() ->
                 new CompensateInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        null, "inv-001"))
+                        null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("documentId");
-    }
-
-    @Test
-    @DisplayName("CompensateInvoicePdfCommand rejects null invoiceId")
-    void compensateCommand_nullInvoiceId_throwsNullPointerException() {
-        assertThatThrownBy(() ->
-                new CompensateInvoicePdfCommand("saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1",
-                        "doc-1", null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("invoiceId");
     }
 
     @Test
     @DisplayName("CompensateInvoicePdfCommand accepts valid arguments")
     void compensateCommand_validArgs_constructsSuccessfully() {
         CompensateInvoicePdfCommand cmd = new CompensateInvoicePdfCommand(
-                "saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1", "doc-1", "inv-001");
-        org.assertj.core.api.Assertions.assertThat(cmd.getInvoiceId()).isEqualTo("inv-001");
+                "saga-1", SagaStep.GENERATE_INVOICE_PDF, "corr-1", "doc-1");
+        org.assertj.core.api.Assertions.assertThat(cmd.getDocumentId()).isEqualTo("doc-1");
     }
 }
